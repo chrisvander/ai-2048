@@ -17,7 +17,7 @@ use tui::{
 mod game;
 
 static TICK_RATE: Duration = Duration::from_millis(250);
-static MENU_ITEMS: &[&str] = &["Play (Keyboard)", "Play (Expectimax)", "Play (RL)"];
+static MENU_ITEMS: &[&str] = &["Play (Keyboard)", "Play (Random)", "Play (Expectimax)", "Play (RL)"];
 
 pub enum Screen {
     Menu {
@@ -56,11 +56,35 @@ impl Default for App {
     }
 }
 
+fn get_color_for_value(v: u32) -> Color {
+    match v {
+        2 => Color::Rgb(238, 228, 218),
+        4 => Color::Rgb(237, 224, 200),
+        8 => Color::Rgb(242, 177, 121),
+        16 => Color::Rgb(245, 149, 99),
+        32 => Color::Rgb(246, 124, 95),
+        64 => Color::Rgb(246, 94, 59),
+        128 => Color::Rgb(237, 207, 114),
+        256 => Color::Rgb(237, 204, 97),
+        512 => Color::Rgb(237, 200, 80),
+        1024 => Color::Rgb(237, 197, 63),
+        2048 => Color::Rgb(237, 194, 46),
+        4096 => Color::Rgb(173, 183, 119),
+        8192 => Color::Rgb(170, 183, 102),
+        16384 => Color::Rgb(166, 183, 85),
+        32768 => Color::Rgb(163, 183, 68),
+        65536 => Color::Rgb(160, 183, 51),
+        _ => Color::DarkGray,
+    }
+}
+
 fn render_game<B: Backend>(f: &mut Frame<B>, block: Block<'_>, game: &Game, rect: Rect) {
     let game_state = game.get_table();
 
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-    let normal_style = Style::default().bg(Color::DarkGray);
+    let normal_style = Style::default()
+        .fg(Color::Black)
+        .add_modifier(Modifier::BOLD);
     let rows = game_state.iter().map(|row| {
         let cells = row.iter().map(|c| {
             let cstr = if *c == 1 {
@@ -78,7 +102,7 @@ fn render_game<B: Backend>(f: &mut Frame<B>, block: Block<'_>, game: &Game, rect
                 ]
                 .join(""),
             ))
-            .style(normal_style)
+            .style(normal_style.bg(get_color_for_value(*c)))
         });
         Row::new(cells).height(5).bottom_margin(1)
     });
@@ -115,19 +139,34 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             f.render_stateful_widget(list, chunks[0], state);
 
             let block = Block::default().title("Info").borders(Borders::ALL);
-            let paragraph = Paragraph::new("Use arrow keys to change menu items\nPress q to exit")
-                .block(block)
-                .wrap(Wrap { trim: true });
+            let text = vec![
+                Spans::from("Use arrow keys to navigate"),
+                Spans::from("Press q to exit"),
+            ];
+            let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
             f.render_widget(paragraph, chunks[1]);
         }
         Screen::KeyboardGame(game) => {
             let game_block = Block::default().title("Game").borders(Borders::ALL);
             render_game(f, game_block, game, chunks[0]);
             let block = Block::default().title("Info").borders(Borders::ALL);
-            let paragraph = Paragraph::new("Use arrow keys to move the tiles\nPress q to exit")
-                .block(block)
-                .wrap(Wrap { trim: true });
-
+            let game_over_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
+            let bold_span = |s| Span::styled(s, Style::default().add_modifier(Modifier::BOLD));
+            let text = vec![
+                Spans::from(vec![
+                    bold_span("Score: "),
+                    Span::from(game.get_score().to_string()),
+                ]),
+                Spans::from(if game.game_over() {
+                    Span::styled("Game over.", game_over_style)
+                } else {
+                    Span::from("")
+                }),
+                Spans::from(""),
+                Spans::from("Use arrow keys to move the tiles"),
+                Spans::from("Press q to exit"),
+            ];
+            let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
             f.render_widget(paragraph, chunks[1]);
         }
         Screen::AIGame(agent, game) => {

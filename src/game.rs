@@ -10,11 +10,15 @@ pub trait Agent {
 
 pub struct Game {
     state: [u16; 16],
+    score: usize,
 }
 
 impl Default for Game {
     fn default() -> Self {
-        let mut g = Game { state: [0; 16] };
+        let mut g = Game {
+            state: [0; 16],
+            score: 0,
+        };
         g.generate_tile();
         g.generate_tile();
         g
@@ -23,7 +27,10 @@ impl Default for Game {
 
 impl Clone for Game {
     fn clone(&self) -> Self {
-        Game { state: self.state }
+        Game {
+            state: self.state,
+            score: self.score,
+        }
     }
 }
 
@@ -85,6 +92,35 @@ impl Game {
             .map(|n| 2_u32.pow(*n as u32))
             .collect::<Vec<_>>();
         pows.chunks(4).map(|s| s.into()).collect()
+    }
+
+    pub fn game_over(&self) -> bool {
+        // game is not over if any tile is empty
+        if self.state.iter().any(|n| *n == 0) {
+            return false;
+        }
+        // if any tile has a neighbor with the same value, game is not over
+        // check rows
+        for row in self.get_condensed_rows() {
+            for i in 0..3 {
+                if row[i] == row[i + 1] {
+                    return false;
+                }
+            }
+        }
+        // check cols
+        for col in self.get_condensed_cols() {
+            for i in 0..3 {
+                if col[i] == col[i + 1] {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    pub fn get_score(&self) -> &usize {
+        &self.score
     }
 
     pub fn get_state(&self) -> &[u16; 16] {

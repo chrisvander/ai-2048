@@ -1,12 +1,21 @@
-use crate::agent::random::RandomAgent;
+use crate::agent::{random::RandomAgent, Agent};
 use crate::game::*;
 
+use agent::random::RandomTree;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{error::Error, io, time::Duration};
+use std::sync::RwLock;
+use std::thread::JoinHandle;
+use std::{
+    error::Error,
+    io,
+    sync::{Arc},
+    thread,
+    time::Duration,
+};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout, Rect},
@@ -19,20 +28,32 @@ use tui::{
 mod agent;
 mod game;
 
-static TICK_RATE: Duration = Duration::from_millis(250);
+static TICK_RATE: Duration = Duration::from_millis(50);
 static MENU_ITEMS: &[&str] = &[
     "Play (Keyboard)",
     "Play (Random)",
-    "Play (Expectimax)",
+    "Play (Random Tree)",
     "Play (RL)",
 ];
+
+pub struct GameSimulator {
+    pub game: Game,
+    agent: Box<dyn Agent + Sync + Send>,
+}
+
+impl GameSimulator {
+    fn make_move(&mut self) {
+        self.agent.make_move(&mut self.game);
+    }
+}
 
 pub enum Screen {
     Menu {
         state: ListState,
         menu: List<'static>,
     },
-    Game(Option<Box<dyn Agent>>, Game),
+    Game(Game),
+    AgentGame(JoinHandle<()>, Arc<RwLock<GameSimulator>>),
 }
 
 pub struct App {
@@ -153,7 +174,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
             f.render_widget(paragraph, chunks[1]);
         }
-        Screen::Game(agent, game) => {
+        Screen::Game(game) => {
             let game_block = Block::default().title("Game").borders(Borders::ALL);
             render_game(f, game_block, game, chunks[0]);
             let block = Block::default().title("Info").borders(Borders::ALL);
@@ -170,21 +191,148 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
                     Span::from("")
                 }),
                 Spans::from(""),
-                Spans::from(if let Some(a) = agent {
-                    a.log_messages()
-                } else {
-                    "Use arrow keys to move the tiles".to_string()
-                }),
+                Spans::from("Use arrow keys to move the tiles".to_string()),
                 Spans::from("Press q to exit"),
             ];
+            let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
+            f.render_widget(paragraph, chunks[1]);
+        }
+        Screen::AgentGame(_, game_sim) => {
+            let game_sim = game_sim.read().unwrap();
+            let game_block = Block::default().title("Game").borders(Borders::ALL);
+            render_game(f, game_block, &game_sim.game, chunks[0]);
+            let block = Block::default().title("Info").borders(Borders::ALL);
+            let game_over_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
+            let bold_span = |s| Span::styled(s, Style::default().add_modifier(Modifier::BOLD));
+            let mut text = vec![
+                Spans::from(vec![
+                    bold_span("Score: "),
+                    Span::from(game_sim.game.get_score().to_string()),
+                ]),
+                Spans::from(if game_sim.game.game_over() {
+                    Span::styled("Game over.", game_over_style)
+                } else {
+                    Span::from("")
+                }),
+                Spans::from(""),
+            ];
+            text.append(&mut game_sim.agent.tui_messages());
+            text.append(&mut vec![Spans::from(""), Spans::from("Press q to exit")]);
             let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
             f.render_widget(paragraph, chunks[1]);
         }
     }
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
-    terminal.clear()?;
+enum IntAction {
+    Continue,
+    Exit,
+}
+
+fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Error> {
+    // each tick, lets see what screen we're at for interaction
+    match &mut app.screen {
+        // menu
+        Screen::Menu { state, menu: _ } => {
+            // wait for key event within timeout; if no event, loop
+            if !event::poll(timeout)? {
+                return Ok(IntAction::Continue);
+            }
+            let Event::Key(event) = event::read()? else {
+                return Ok(IntAction::Continue);
+            };
+            match event.code {
+                KeyCode::Char('q') => return Ok(IntAction::Exit),
+                KeyCode::Up => {
+                    let Some(sel) = state.selected() else {
+                        state.select(Some(0));
+                        return Ok(IntAction::Continue);
+                    };
+                    if sel > 0 {
+                        state.select(Some(sel - 1));
+                    }
+                }
+                KeyCode::Down => {
+                    let Some(sel) = state.selected() else {
+                        state.select(Some(0));
+                        return Ok(IntAction::Continue);
+                    };
+                    if sel < MENU_ITEMS.len() - 1 {
+                        state.select(Some(sel + 1));
+                    }
+                }
+                KeyCode::Enter => {
+                    let agent: Option<Box<dyn Agent + Sync + Send>> = match state.selected() {
+                        Some(1) => Some(Box::new(RandomAgent::new())),
+                        Some(2) => Some(Box::new(RandomTree::new())),
+                        _ => None,
+                    };
+
+                    let Some(a) = agent else {
+                        app.screen = Screen::Game(Game::new());
+                        return Ok(IntAction::Continue);
+                    };
+
+                    let agent_sim = Arc::new(RwLock::new(GameSimulator {
+                        game: Game::new(),
+                        agent: a,
+                    }));
+                    let local_sim = agent_sim.clone();
+                    let t = thread::spawn(move || {
+                        while !agent_sim.read().unwrap().game.game_over() {
+                            agent_sim.write().unwrap().make_move();
+                        }
+                    });
+                    app.screen = Screen::AgentGame(t, local_sim);
+                }
+                _ => {}
+            };
+        }
+        // keyboard game
+        Screen::Game(game) => {
+            // standard game blocks until key move
+            let Ok(keyboard_move) = (match event::read()? {
+                Event::Key(event) => match event.code {
+                    KeyCode::Char('q') => { return Ok(IntAction::Exit) },
+                    KeyCode::Char('w') => Ok(Move::Up),
+                    KeyCode::Char('a') => Ok(Move::Left),
+                    KeyCode::Char('s') => Ok(Move::Down),
+                    KeyCode::Char('d') => Ok(Move::Right),
+                    KeyCode::Up => Ok(Move::Up),
+                    KeyCode::Left => Ok(Move::Left),
+                    KeyCode::Down => Ok(Move::Down),
+                    KeyCode::Right => Ok(Move::Right),
+                    _ => Err("Invalid key"),
+                },
+                _ => Err("Event not a key"),
+            }) else {
+                return Ok(IntAction::Continue);
+            };
+
+            // synchronously update the game
+            game.update(keyboard_move);
+        }
+        // game with AI agent. no updating the game involved, we just observe
+        Screen::AgentGame(_, _) => {
+            if !event::poll(timeout)? {
+                return Ok(IntAction::Continue);
+            }
+            let Event::Key(event) = event::read()? else {
+                return Ok(IntAction::Continue);
+            };
+            match event.code {
+                KeyCode::Char('q') => {
+                    return Ok(IntAction::Exit);
+                }
+                _ => {}
+            };
+        }
+    };
+
+    Ok(IntAction::Continue)
+}
+
+fn run_tui<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
     let mut app = App::default();
     let mut last_tick = std::time::Instant::now();
     loop {
@@ -194,78 +342,27 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
-        match &mut app.screen {
-            Screen::Menu { state, menu: _ } => {
-                if !event::poll(timeout)? {
+        match get_interaction(&mut app, timeout)? {
+            IntAction::Continue => {}
+            IntAction::Exit => match app.screen {
+                Screen::Menu { state: _, menu: _ } => break,
+                Screen::Game(_) => {
+                    app.screen = Screen::default();
                     continue;
                 }
-                let Event::Key(event) = event::read().unwrap() else { continue; };
-                match event.code {
-                    KeyCode::Char('q') => break Ok(()),
-                    KeyCode::Up => {
-                        let Some(sel) = state.selected() else { continue };
-                        if sel > 0 {
-                            state.select(Some(sel - 1));
-                        }
-                    }
-                    KeyCode::Down => {
-                        let Some(sel) = state.selected() else { continue };
-                        if sel < MENU_ITEMS.len() - 1 {
-                            state.select(Some(sel + 1));
-                        }
-                    }
-                    KeyCode::Enter => {
-                        let agent: Option<Box<dyn Agent>> = match state.selected() {
-                            Some(1) => Some(Box::new(RandomAgent::default())),
-                            _ => None,
-                        };
-
-                        app.screen = Screen::Game(agent, Game::new());
-                    }
-                    _ => {}
-                };
-            }
-            Screen::Game(None, game) => {
-                let Ok(keyboard_move) = (match event::read()? {
-                    Event::Key(event) => match event.code {
-                        KeyCode::Char('q') => { app.screen = Screen::default(); continue },
-                        KeyCode::Char('w') => Ok(Move::Up),
-                        KeyCode::Char('a') => Ok(Move::Left),
-                        KeyCode::Char('s') => Ok(Move::Down),
-                        KeyCode::Char('d') => Ok(Move::Right),
-                        KeyCode::Up => Ok(Move::Up),
-                        KeyCode::Left => Ok(Move::Left),
-                        KeyCode::Down => Ok(Move::Down),
-                        KeyCode::Right => Ok(Move::Right),
-                        _ => Err("Invalid key"),
-                    },
-                    _ => Err("Event not a key"),
-                }) else {
+                Screen::AgentGame(_, _) => {
+                    app.screen = Screen::default();
                     continue;
-                };
-
-                game.update(keyboard_move);
-            }
-            Screen::Game(Some(agent), game) => {
-                if event::poll(Duration::ZERO)? || game.game_over() {
-                    let Event::Key(event) = event::read()? else { continue };
-                    match event.code {
-                        KeyCode::Char('q') => {
-                            app.screen = Screen::default();
-                            continue;
-                        }
-                        _ => {}
-                    };
                 }
-
-                agent.make_move(game);
-            }
-        };
+            },
+        }
 
         if last_tick.elapsed() >= TICK_RATE {
             last_tick = std::time::Instant::now();
         }
     }
+
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -274,8 +371,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).unwrap();
+    terminal.clear()?;
 
-    run_app(&mut terminal)?;
+    run_tui(&mut terminal)?;
 
     disable_raw_mode()?;
     execute!(

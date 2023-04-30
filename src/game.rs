@@ -1,12 +1,6 @@
+use enum_map::Enum;
 use rand::{seq::SliceRandom, thread_rng, Rng};
-
-pub trait Agent {
-    fn get_move(&mut self, game: &Game) -> Move;
-    fn log_messages(&self) -> String;
-    fn make_move(&mut self, game: &mut Game) {
-        game.update(self.get_move(game));
-    }
-}
+use strum_macros::EnumIter;
 
 pub struct Game {
     state: [u16; 16],
@@ -34,7 +28,7 @@ impl Clone for Game {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Enum, EnumIter, Debug, PartialEq, Clone, Copy)]
 pub enum Move {
     Up,
     Down,

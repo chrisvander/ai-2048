@@ -14,10 +14,16 @@ use tui::{
     Frame, Terminal,
 };
 
+mod agent;
 mod game;
 
 static TICK_RATE: Duration = Duration::from_millis(250);
-static MENU_ITEMS: &[&str] = &["Play (Keyboard)", "Play (Random)", "Play (Expectimax)", "Play (RL)"];
+static MENU_ITEMS: &[&str] = &[
+    "Play (Keyboard)",
+    "Play (Random)",
+    "Play (Expectimax)",
+    "Play (RL)",
+];
 
 pub enum Screen {
     Menu {

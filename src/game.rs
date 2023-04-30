@@ -2,7 +2,7 @@ use rand::{seq::SliceRandom, thread_rng, Rng};
 
 pub trait Agent {
     fn get_move(&mut self, game: &Game) -> Move;
-    fn log_messages(&self) -> &str;
+    fn log_messages(&self) -> String;
     fn make_move(&mut self, game: &mut Game) {
         game.update(self.get_move(game));
     }
@@ -34,7 +34,7 @@ impl Clone for Game {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Move {
     Up,
     Down,
@@ -42,7 +42,10 @@ pub enum Move {
     Right,
 }
 
-fn merge_duplicates(v: Vec<u16>) -> Vec<u16> {
+fn merge_duplicates<F>(v: Vec<u16>, mut f: F) -> Vec<u16>
+where
+    F: FnMut(usize) -> (),
+{
     let mut r = vec![];
     let mut skip = false;
     for i in 0..v.len() {
@@ -52,6 +55,8 @@ fn merge_duplicates(v: Vec<u16>) -> Vec<u16> {
         }
         if i < v.len() - 1 && v[i] == v[i + 1] {
             r.push(v[i] + 1);
+            // score
+            f(2_usize.pow((v[i] + 1).into()));
             skip = true;
         } else {
             r.push(v[i]);
@@ -165,7 +170,7 @@ impl Game {
 
         let new_state: [u16; 16] = condensed
             .iter()
-            .map(|v| merge_duplicates(v.to_owned()))
+            .map(|v| merge_duplicates(v.to_owned(), |s| self.score += s))
             .map(|mut v| {
                 let mut r = vec![0; 4 - v.len()];
                 if input == Move::Up || input == Move::Left {
@@ -264,13 +269,13 @@ mod tests {
     #[test]
     fn test_merge_duplicates() {
         let v = vec![1, 1, 2, 2];
-        assert_eq!(merge_duplicates(v), vec![2, 3]);
+        assert_eq!(merge_duplicates(v, |_| {}), vec![2, 3]);
         let v = vec![1, 2, 2, 2];
-        assert_eq!(merge_duplicates(v), vec![1, 3, 2]);
+        assert_eq!(merge_duplicates(v, |_| {}), vec![1, 3, 2]);
         let v = vec![1, 1, 1, 1];
-        assert_eq!(merge_duplicates(v), vec![2, 2]);
+        assert_eq!(merge_duplicates(v, |_| {}), vec![2, 2]);
         let v = vec![1, 2, 2, 6];
-        assert_eq!(merge_duplicates(v), vec![1, 3, 6]);
+        assert_eq!(merge_duplicates(v, |_| {}), vec![1, 3, 6]);
     }
 
     #[test]

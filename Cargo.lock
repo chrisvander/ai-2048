@@ -3,6 +3,16 @@
 version = 3
 
 [[package]]
+name = "ai-2048"
+version = "0.1.0"
+dependencies = [
+ "crossterm 0.26.1",
+ "rand",
+ "transpose",
+ "tui",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -271,16 +281,6 @@ dependencies = [
  "crossterm 0.25.0",
  "unicode-segmentation",
  "unicode-width",
-]
-
-[[package]]
-name = "tui-2048-ai"
-version = "0.1.0"
-dependencies = [
- "crossterm 0.26.1",
- "rand",
- "transpose",
- "tui",
 ]
 
 [[package]]

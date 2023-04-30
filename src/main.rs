@@ -1,4 +1,6 @@
+use crate::agent::random::RandomAgent;
 use crate::game::*;
+
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -30,8 +32,7 @@ pub enum Screen {
         state: ListState,
         menu: List<'static>,
     },
-    KeyboardGame(Game),
-    AIGame(Box<dyn Agent>, Game),
+    Game(Option<Box<dyn Agent>>, Game),
 }
 
 pub struct App {
@@ -152,7 +153,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
             f.render_widget(paragraph, chunks[1]);
         }
-        Screen::KeyboardGame(game) => {
+        Screen::Game(agent, game) => {
             let game_block = Block::default().title("Game").borders(Borders::ALL);
             render_game(f, game_block, game, chunks[0]);
             let block = Block::default().title("Info").borders(Borders::ALL);
@@ -169,19 +170,14 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
                     Span::from("")
                 }),
                 Spans::from(""),
-                Spans::from("Use arrow keys to move the tiles"),
+                Spans::from(if let Some(a) = agent {
+                    a.log_messages()
+                } else {
+                    "Use arrow keys to move the tiles".to_string()
+                }),
                 Spans::from("Press q to exit"),
             ];
             let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
-            f.render_widget(paragraph, chunks[1]);
-        }
-        Screen::AIGame(agent, game) => {
-            let game_block = Block::default().title("Game").borders(Borders::ALL);
-            f.render_widget(game_block, chunks[0]);
-            let block = Block::default().title("Log").borders(Borders::ALL);
-            let paragraph = Paragraph::new(agent.log_messages())
-                .block(block)
-                .wrap(Wrap { trim: true });
             f.render_widget(paragraph, chunks[1]);
         }
     }
@@ -198,62 +194,72 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
-        match event::poll(timeout)? {
-            true => match &mut app.screen {
-                Screen::Menu { state, menu: _ } => {
-                    let event = event::read().unwrap();
-                    match event {
-                        Event::Key(event) => match event.code {
-                            KeyCode::Char('q') => break Ok(()),
-                            KeyCode::Up => {
-                                let Some(sel) = state.selected() else { continue };
-                                if sel > 0 {
-                                    state.select(Some(sel - 1));
-                                }
-                            }
-                            KeyCode::Down => {
-                                let Some(sel) = state.selected() else { continue };
-                                if sel < MENU_ITEMS.len() - 1 {
-                                    state.select(Some(sel + 1));
-                                }
-                            }
-                            KeyCode::Enter => match state.selected() {
-                                Some(0) => {
-                                    app.screen = Screen::KeyboardGame(Game::new());
-                                }
-                                _ => {}
-                            },
-                            _ => {}
-                        },
-                        _ => {}
+        match &mut app.screen {
+            Screen::Menu { state, menu: _ } => {
+                if !event::poll(timeout)? {
+                    continue;
+                }
+                let Event::Key(event) = event::read().unwrap() else { continue; };
+                match event.code {
+                    KeyCode::Char('q') => break Ok(()),
+                    KeyCode::Up => {
+                        let Some(sel) = state.selected() else { continue };
+                        if sel > 0 {
+                            state.select(Some(sel - 1));
+                        }
                     }
-                }
-                Screen::KeyboardGame(game) => {
-                    let Ok(keyboard_move) = (match event::read().unwrap() {
-                        Event::Key(event) => match event.code {
-                            KeyCode::Char('q') => { app.screen = Screen::default(); continue },
-                            KeyCode::Char('w') => Ok(Move::Up),
-                            KeyCode::Char('a') => Ok(Move::Left),
-                            KeyCode::Char('s') => Ok(Move::Down),
-                            KeyCode::Char('d') => Ok(Move::Right),
-                            KeyCode::Up => Ok(Move::Up),
-                            KeyCode::Left => Ok(Move::Left),
-                            KeyCode::Down => Ok(Move::Down),
-                            KeyCode::Right => Ok(Move::Right),
-                            _ => Err("Invalid key"),
-                        },
-                        _ => Err("Event not a key"),
-                    }) else {
-                        continue;
-                    };
+                    KeyCode::Down => {
+                        let Some(sel) = state.selected() else { continue };
+                        if sel < MENU_ITEMS.len() - 1 {
+                            state.select(Some(sel + 1));
+                        }
+                    }
+                    KeyCode::Enter => {
+                        let agent: Option<Box<dyn Agent>> = match state.selected() {
+                            Some(1) => Some(Box::new(RandomAgent::default())),
+                            _ => None,
+                        };
 
-                    game.update(keyboard_move);
+                        app.screen = Screen::Game(agent, Game::new());
+                    }
+                    _ => {}
+                };
+            }
+            Screen::Game(None, game) => {
+                let Ok(keyboard_move) = (match event::read()? {
+                    Event::Key(event) => match event.code {
+                        KeyCode::Char('q') => { app.screen = Screen::default(); continue },
+                        KeyCode::Char('w') => Ok(Move::Up),
+                        KeyCode::Char('a') => Ok(Move::Left),
+                        KeyCode::Char('s') => Ok(Move::Down),
+                        KeyCode::Char('d') => Ok(Move::Right),
+                        KeyCode::Up => Ok(Move::Up),
+                        KeyCode::Left => Ok(Move::Left),
+                        KeyCode::Down => Ok(Move::Down),
+                        KeyCode::Right => Ok(Move::Right),
+                        _ => Err("Invalid key"),
+                    },
+                    _ => Err("Event not a key"),
+                }) else {
+                    continue;
+                };
+
+                game.update(keyboard_move);
+            }
+            Screen::Game(Some(agent), game) => {
+                if event::poll(Duration::ZERO)? || game.game_over() {
+                    let Event::Key(event) = event::read()? else { continue };
+                    match event.code {
+                        KeyCode::Char('q') => {
+                            app.screen = Screen::default();
+                            continue;
+                        }
+                        _ => {}
+                    };
                 }
-                Screen::AIGame(agent, game) => {
-                    agent.make_move(game);
-                }
-            },
-            _ => {}
+
+                agent.make_move(game);
+            }
         };
 
         if last_tick.elapsed() >= TICK_RATE {

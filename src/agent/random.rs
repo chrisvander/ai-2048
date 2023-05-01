@@ -2,8 +2,9 @@ use crate::agent::Agent;
 use crate::game::{Game, Move};
 
 use enum_map::EnumMap;
+use rayon::prelude::*;
 use strum::IntoEnumIterator;
-use tui::style::{Modifier, Style};
+use tui::style::{Color, Modifier, Style};
 use tui::text::{Span, Spans};
 
 // Basic random agent, randomly selects an action and takes the move.
@@ -37,17 +38,33 @@ fn simulate_random_game(mut game: Game) -> Game {
     game
 }
 
-// Random tree search, simulate many games per move and then select the move based on some metric.
+// Random tree search, simulate many games per move and then select the move based on the highest
+// average score.
 type MoveScores = EnumMap<Move, usize>;
 pub struct RandomTree {
     sim_count: usize,
+    metric: RandomTreeMetric,
     last_scores: MoveScores,
+}
+
+pub enum RandomTreeMetric {
+    AvgScore,
+    AvgMoves,
+}
+
+impl RandomTree {
+    pub fn new_with(metric: RandomTreeMetric) -> Self {
+        let mut ag = RandomTree::new();
+        ag.metric = metric;
+        ag
+    }
 }
 
 impl Agent for RandomTree {
     fn new() -> Self {
         RandomTree {
-            sim_count: 500,
+            sim_count: 1000,
+            metric: RandomTreeMetric::AvgScore,
             last_scores: MoveScores::default(),
         }
     }
@@ -56,13 +73,23 @@ impl Agent for RandomTree {
         let mut scores = MoveScores::default();
         for game_move in Move::iter() {
             let mut sim_game = game.clone();
-            sim_game.update(game_move);
-            let score_sum = vec![0; self.sim_count]
-                .iter()
-                .map(|_| simulate_random_game(sim_game.clone()).get_score().clone())
-                .fold(0, |a, b| a + b);
+            let can_move = sim_game.update(game_move);
+            if !can_move {
+                continue;
+            }
 
-            scores[game_move] = score_sum / self.sim_count;
+            let score = vec![0; self.sim_count]
+                .par_iter()
+                .map(|_| {
+                    let game = simulate_random_game(sim_game.clone());
+                    match self.metric {
+                        RandomTreeMetric::AvgMoves => game.get_num_moves().clone(),
+                        RandomTreeMetric::AvgScore => game.get_score().clone(),
+                    }
+                })
+                .sum::<usize>();
+
+            scores[game_move] = score;
         }
 
         self.last_scores = scores;
@@ -70,23 +97,44 @@ impl Agent for RandomTree {
     }
 
     fn tui_messages(&self) -> Vec<Spans> {
-        vec![
+        let highest_move = self
+            .last_scores
+            .iter()
+            .max_by_key(|(_, score)| *score)
+            .unwrap()
+            .0;
+
+        let mut score_spans = Move::iter()
+            .map(|m| {
+                if m == highest_move {
+                    Spans::from(Span::styled(
+                        format!("{}: {}", m, self.last_scores[m] / self.sim_count),
+                        Style::default()
+                            .add_modifier(Modifier::BOLD)
+                            .bg(Color::Green),
+                    ))
+                } else {
+                    Spans::from(format!("{}: {}", m, self.last_scores[m] / self.sim_count))
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let mut msgs = vec![
             Spans::from(Span::styled(
                 "Random Tree Search",
                 Style::default().add_modifier(Modifier::BOLD),
             )),
-            Spans::from(Span::styled(
-                format!(
-                    "Taking the average of {} simulations, per move, to determine the next best move.",
-                    self.sim_count
-                ),
-                Style::default().add_modifier(Modifier::ITALIC),
+            Spans::from(format!(
+                "Taking the average of {} simulations, per move, to determine the next best move. Comparing by {}.",
+                self.sim_count,
+                match self.metric {
+                    RandomTreeMetric::AvgScore=>"highest score",
+                    RandomTreeMetric::AvgMoves =>"number of moves"
+                }
             )),
             Spans::from(""),
-            Spans::from(format!("Up: {}", self.last_scores[Move::Up])),
-            Spans::from(format!("Down: {}", self.last_scores[Move::Down])),
-            Spans::from(format!("Left: {}", self.last_scores[Move::Left])),
-            Spans::from(format!("Right: {}", self.last_scores[Move::Right])),
-        ]
+        ];
+        msgs.append(&mut score_spans);
+        msgs
     }
 }

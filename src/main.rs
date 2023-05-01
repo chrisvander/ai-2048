@@ -1,7 +1,7 @@
 use crate::agent::{random::RandomAgent, Agent};
 use crate::game::*;
 
-use agent::random::RandomTree;
+use agent::random::{RandomTree, RandomTreeMetric};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -9,13 +9,7 @@ use crossterm::{
 };
 use std::sync::RwLock;
 use std::thread::JoinHandle;
-use std::{
-    error::Error,
-    io,
-    sync::{Arc},
-    thread,
-    time::Duration,
-};
+use std::{error::Error, io, sync::Arc, thread, time::Duration};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout, Rect},
@@ -31,9 +25,10 @@ mod game;
 static TICK_RATE: Duration = Duration::from_millis(50);
 static MENU_ITEMS: &[&str] = &[
     "Play (Keyboard)",
-    "Play (Random)",
-    "Play (Random Tree)",
-    "Play (RL)",
+    "Solve (Random)",
+    "Solve (Tree Search, Max Score)",
+    "Solve (Tree Search, Max Moves)",
+    "Train (RL)",
 ];
 
 pub struct GameSimulator {
@@ -106,33 +101,29 @@ fn get_color_for_value(v: u32) -> Color {
     }
 }
 
+fn render_table_cell(c: &u32) -> Cell<'_> {
+    let cstr = if *c == 1 {
+        String::from("")
+    } else {
+        c.to_string()
+    };
+
+    let cell_style = Style::default()
+        .add_modifier(Modifier::BOLD)
+        .bg(get_color_for_value(*c));
+
+    let front_padding = " ".repeat(5 - (cstr.len() / 2));
+    let cell_body = ["\n\n", front_padding.as_str(), cstr.as_str(), "\n\n"].join("");
+
+    Cell::from(Text::from(cell_body)).style(cell_style)
+}
+
 fn render_game<B: Backend>(f: &mut Frame<B>, block: Block<'_>, game: &Game, rect: Rect) {
     let game_state = game.get_table();
-
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-    let normal_style = Style::default()
-        .fg(Color::Black)
-        .add_modifier(Modifier::BOLD);
     let rows = game_state.iter().map(|row| {
-        let cells = row.iter().map(|c| {
-            let cstr = if *c == 1 {
-                String::from("")
-            } else {
-                c.to_string()
-            };
-
-            Cell::from(Text::from(
-                [
-                    "\n\n",
-                    " ".repeat(5 - (cstr.len() / 2)).as_str(),
-                    cstr.as_str(),
-                    "\n\n",
-                ]
-                .join(""),
-            ))
-            .style(normal_style.bg(get_color_for_value(*c)))
-        });
-        Row::new(cells).height(5).bottom_margin(1)
+        let row = row.iter().map(render_table_cell);
+        Row::new(row).height(5).bottom_margin(1)
     });
     let t = Table::new(rows)
         .block(block)
@@ -265,6 +256,7 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                     let agent: Option<Box<dyn Agent + Sync + Send>> = match state.selected() {
                         Some(1) => Some(Box::new(RandomAgent::new())),
                         Some(2) => Some(Box::new(RandomTree::new())),
+                        Some(3) => Some(Box::new(RandomTree::new_with(RandomTreeMetric::AvgMoves))),
                         _ => None,
                     };
 

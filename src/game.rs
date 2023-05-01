@@ -1,3 +1,5 @@
+use core::fmt;
+
 use enum_map::Enum;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use strum_macros::EnumIter;
@@ -5,6 +7,7 @@ use strum_macros::EnumIter;
 pub struct Game {
     state: [u16; 16],
     score: usize,
+    num_moves: usize,
 }
 
 impl Default for Game {
@@ -12,6 +15,7 @@ impl Default for Game {
         let mut g = Game {
             state: [0; 16],
             score: 0,
+            num_moves: 0,
         };
         g.generate_tile();
         g.generate_tile();
@@ -24,6 +28,7 @@ impl Clone for Game {
         Game {
             state: self.state,
             score: self.score,
+            num_moves: self.num_moves,
         }
     }
 }
@@ -34,6 +39,17 @@ pub enum Move {
     Down,
     Left,
     Right,
+}
+
+impl fmt::Display for Move {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Move::Up => write!(f, "Up"),
+            Move::Down => write!(f, "Down"),
+            Move::Left => write!(f, "Left"),
+            Move::Right => write!(f, "Right"),
+        }
+    }
 }
 
 fn merge_duplicates<F>(v: Vec<u16>, mut f: F) -> Vec<u16>
@@ -64,13 +80,16 @@ impl Game {
         Game::default()
     }
 
-    pub fn update(&mut self, input: Move) {
+    pub fn update(&mut self, input: Move) -> bool {
         let state_before = self.state.clone();
         self.shift(input);
         // element wise compare
         if state_before != self.state {
             self.generate_tile();
+            self.num_moves += 1;
+            return true;
         }
+        false
     }
 
     fn xy_to_index(x: u8, y: u8) -> usize {
@@ -116,6 +135,10 @@ impl Game {
             }
         }
         return true;
+    }
+
+    pub fn get_num_moves(&self) -> &usize {
+        &self.num_moves
     }
 
     pub fn get_score(&self) -> &usize {

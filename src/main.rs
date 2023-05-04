@@ -176,6 +176,10 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
                     bold_span("Score: "),
                     Span::from(game.get_score().to_string()),
                 ]),
+                Spans::from(vec![
+                    bold_span("Moves: "),
+                    Span::from(game.get_num_moves().to_string()),
+                ]),
                 Spans::from(if game.game_over() {
                     Span::styled("Game over.", game_over_style)
                 } else {
@@ -199,6 +203,10 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
                 Spans::from(vec![
                     bold_span("Score: "),
                     Span::from(game_sim.game.get_score().to_string()),
+                ]),
+                Spans::from(vec![
+                    bold_span("Moves: "),
+                    Span::from(game_sim.game.get_num_moves().to_string()),
                 ]),
                 Spans::from(if game_sim.game.game_over() {
                     Span::styled("Game over.", game_over_style)

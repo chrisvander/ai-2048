@@ -28,7 +28,7 @@ static MENU_ITEMS: &[&str] = &[
     "Solve (Random)",
     "Solve (Tree Search, Max Score)",
     "Solve (Tree Search, Max Moves)",
-    "Train (RL)",
+    "Solve (Expectimax)",
 ];
 
 pub struct GameSimulator {

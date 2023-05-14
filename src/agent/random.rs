@@ -15,7 +15,7 @@ impl Agent for RandomAgent {
     }
 
     fn get_move(&mut self, _: &Game) -> Move {
-        match rand::random::<usize>() % 4 {
+        match fastrand::usize(0..4) {
             0 => Move::Up,
             1 => Move::Down,
             2 => Move::Left,
@@ -73,15 +73,17 @@ impl Agent for RandomTree {
         let mut scores = MoveScores::default();
         for game_move in Move::iter() {
             let mut sim_game = game.clone();
-            let can_move = sim_game.update(game_move);
-            if !can_move {
+            let test = sim_game.update(game_move);
+            if !test {
                 continue;
             }
 
             let score = vec![0; self.sim_count]
                 .par_iter()
                 .map(|_| {
-                    let game = simulate_random_game(sim_game.clone());
+                    let mut sim_game = game.clone();
+                    sim_game.update(game_move);
+                    let game = simulate_random_game(sim_game);
                     match self.metric {
                         RandomTreeMetric::AvgMoves => game.get_num_moves().clone(),
                         RandomTreeMetric::AvgScore => game.get_score().clone(),

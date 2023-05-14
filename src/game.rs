@@ -1,7 +1,6 @@
 use core::fmt;
 
 use enum_map::Enum;
-use rand::{seq::SliceRandom, thread_rng, Rng};
 use strum_macros::EnumIter;
 
 pub struct Game {
@@ -52,11 +51,11 @@ impl fmt::Display for Move {
     }
 }
 
-fn merge_duplicates<F>(v: Vec<u16>, mut f: F) -> Vec<u16>
+fn merge_duplicates<F>(v: &Vec<u16>, mut f: F) -> Vec<u16>
 where
     F: FnMut(usize) -> (),
 {
-    let mut r = vec![];
+    let mut r = Vec::with_capacity(4);
     let mut skip = false;
     for i in 0..v.len() {
         if skip {
@@ -157,12 +156,7 @@ impl Game {
         // get vec of rows with empty removed
         self.state
             .chunks(4)
-            .map(|row| {
-                row.iter()
-                    .map(|n| n.to_owned())
-                    .filter(|n| *n != 0)
-                    .collect()
-            })
+            .map(|row| row.iter().map(|n| *n).filter(|n| *n != 0).collect())
             .collect()
     }
 
@@ -171,7 +165,7 @@ impl Game {
         self.state
             .iter()
             .enumerate()
-            .fold(vec![vec![]; 4], |mut acc, (i, n)| {
+            .fold(vec![Vec::with_capacity(4); 4], |mut acc, (i, n)| {
                 if *n != 0 {
                     acc[i % 4].push(*n);
                 }
@@ -187,7 +181,7 @@ impl Game {
 
         let new_state: [u16; 16] = condensed
             .iter()
-            .map(|v| merge_duplicates(v.to_owned(), |s| self.score += s))
+            .map(|v| merge_duplicates(v, |s| self.score += s))
             .map(|mut v| {
                 let mut r = vec![0; 4 - v.len()];
                 if input == Move::Up || input == Move::Left {
@@ -214,7 +208,7 @@ impl Game {
     }
 
     fn generate_tile(&mut self) {
-        let n = thread_rng().gen_range(1..=2);
+        let n = fastrand::u16(1..=2);
 
         // get indexes of empty tiles
         let empty_indexes = self
@@ -229,8 +223,9 @@ impl Game {
             return;
         }
 
-        let chosen_index = empty_indexes.choose(&mut thread_rng()).unwrap();
-        self.state[*chosen_index] = n;
+        let c_idx = fastrand::usize(0..empty_indexes.len());
+        let chosen_index = empty_indexes[c_idx];
+        self.state[chosen_index] = n;
     }
 }
 
@@ -276,9 +271,7 @@ mod tests {
 
         assert_eq!(game.get_tile(0, 0), 2);
 
-        game.shift(Move::Up);
-
-        dbg!(game.get_state());
+        game.shift(Move::Down);
 
         assert_eq!(game.get_tile(0, 3), 2);
     }
@@ -286,13 +279,13 @@ mod tests {
     #[test]
     fn test_merge_duplicates() {
         let v = vec![1, 1, 2, 2];
-        assert_eq!(merge_duplicates(v, |_| {}), vec![2, 3]);
+        assert_eq!(merge_duplicates(&v, |_| {}), vec![2, 3]);
         let v = vec![1, 2, 2, 2];
-        assert_eq!(merge_duplicates(v, |_| {}), vec![1, 3, 2]);
+        assert_eq!(merge_duplicates(&v, |_| {}), vec![1, 3, 2]);
         let v = vec![1, 1, 1, 1];
-        assert_eq!(merge_duplicates(v, |_| {}), vec![2, 2]);
+        assert_eq!(merge_duplicates(&v, |_| {}), vec![2, 2]);
         let v = vec![1, 2, 2, 6];
-        assert_eq!(merge_duplicates(v, |_| {}), vec![1, 3, 6]);
+        assert_eq!(merge_duplicates(&v, |_| {}), vec![1, 3, 6]);
     }
 
     #[test]

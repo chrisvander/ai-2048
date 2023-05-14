@@ -6,26 +6,32 @@ use super::Agent;
 
 type MoveScores = EnumMap<Move, usize>;
 pub struct Expectimax {
+    game: Game,
     depth: usize,
     scores: MoveScores,
 }
 
 impl Agent for Expectimax {
-    fn new() -> Self
+    fn new(game: Game) -> Self
     where
         Self: Sized,
     {
         Expectimax {
+            game,
             depth: 8,
             scores: MoveScores::default(),
         }
     }
 
-    fn get_move(&mut self, game: &Game) -> Move {
+    fn next_move(&mut self) {
         todo!()
     }
 
-    fn tui_messages(&self) -> Vec<tui::text::Spans> {
+    fn get_game(&self) -> &Game {
+        &self.game
+    }
+
+    fn messages(&self) -> Vec<tui::text::Spans> {
         todo!()
     }
 }

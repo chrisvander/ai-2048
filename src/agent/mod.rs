@@ -1,19 +1,21 @@
+use crossterm::event::Event;
 use tui::text::Spans;
 
-use crate::game::{Game, Move};
+use crate::{game::Game, IntAction};
 
-pub mod random;
 pub mod expectimax;
+pub mod random;
+pub mod user;
 
 pub trait Agent {
-    fn new() -> Self
+    fn new(game: Game) -> Self
     where
         Self: Sized;
 
-    fn get_move(&mut self, game: &Game) -> Move;
-    fn make_move(&mut self, game: &mut Game) {
-        game.update(self.get_move(game));
+    fn get_game(&self) -> &Game;
+    fn get_input(&mut self, _: &Event) -> IntAction {
+        IntAction::Continue
     }
-
-    fn tui_messages(&self) -> Vec<Spans>;
+    fn next_move(&mut self);
+    fn messages(&self) -> Vec<Spans>;
 }

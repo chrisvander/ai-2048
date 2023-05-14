@@ -8,40 +8,48 @@ use tui::style::{Color, Modifier, Style};
 use tui::text::{Span, Spans};
 
 // Basic random agent, randomly selects an action and takes the move.
-pub struct RandomAgent;
+pub struct RandomAgent {
+    game: Game,
+}
+
 impl Agent for RandomAgent {
-    fn new() -> Self {
-        RandomAgent {}
+    fn new(game: Game) -> Self {
+        RandomAgent { game }
     }
 
-    fn get_move(&mut self, _: &Game) -> Move {
-        match fastrand::usize(0..4) {
+    fn next_move(&mut self) {
+        self.game.update(match fastrand::usize(0..4) {
             0 => Move::Up,
             1 => Move::Down,
             2 => Move::Left,
             3 => Move::Right,
             _ => unreachable!(),
-        }
+        });
     }
 
-    fn tui_messages(&self) -> Vec<Spans> {
+    fn get_game(&self) -> &Game {
+        &self.game
+    }
+
+    fn messages(&self) -> Vec<Spans> {
         vec![Spans::from("Performing random actions.")]
     }
 }
 
 // Use a RandomAgent to simulate a full game from a starting point
-fn simulate_random_game(mut game: Game) -> Game {
-    let mut agent = RandomAgent::new();
-    while !game.game_over() {
-        agent.make_move(&mut game);
+fn simulate_random_game(game: Game) -> Game {
+    let mut agent = RandomAgent::new(game);
+    while !agent.get_game().game_over() {
+        agent.next_move();
     }
-    game
+    agent.game
 }
 
 // Random tree search, simulate many games per move and then select the move based on the highest
 // average score.
 type MoveScores = EnumMap<Move, usize>;
 pub struct RandomTree {
+    game: Game,
     sim_count: usize,
     metric: RandomTreeMetric,
     last_scores: MoveScores,
@@ -53,26 +61,27 @@ pub enum RandomTreeMetric {
 }
 
 impl RandomTree {
-    pub fn new_with(metric: RandomTreeMetric) -> Self {
-        let mut ag = RandomTree::new();
+    pub fn new_with(game: Game, metric: RandomTreeMetric) -> Self {
+        let mut ag = RandomTree::new(game);
         ag.metric = metric;
         ag
     }
 }
 
 impl Agent for RandomTree {
-    fn new() -> Self {
+    fn new(game: Game) -> Self {
         RandomTree {
+            game,
             sim_count: 1000,
             metric: RandomTreeMetric::AvgScore,
             last_scores: MoveScores::default(),
         }
     }
 
-    fn get_move(&mut self, game: &Game) -> Move {
+    fn next_move(&mut self) {
         let mut scores = MoveScores::default();
         for game_move in Move::iter() {
-            let mut sim_game = game.clone();
+            let mut sim_game = self.game.clone();
             let test = sim_game.update(game_move);
             if !test {
                 continue;
@@ -81,7 +90,7 @@ impl Agent for RandomTree {
             let score = vec![0; self.sim_count]
                 .par_iter()
                 .map(|_| {
-                    let mut sim_game = game.clone();
+                    let mut sim_game = self.game.clone();
                     sim_game.update(game_move);
                     let game = simulate_random_game(sim_game);
                     match self.metric {
@@ -95,10 +104,15 @@ impl Agent for RandomTree {
         }
 
         self.last_scores = scores;
-        scores.iter().max_by_key(|(_, score)| *score).unwrap().0
+        self.game
+            .update(scores.iter().max_by_key(|(_, score)| *score).unwrap().0);
     }
 
-    fn tui_messages(&self) -> Vec<Spans> {
+    fn get_game(&self) -> &Game {
+        &self.game
+    }
+
+    fn messages(&self) -> Vec<Spans> {
         let highest_move = self
             .last_scores
             .iter()

@@ -13,14 +13,16 @@ pub struct UserAgent {
     game: Game,
 }
 
-impl Agent for UserAgent {
-    fn new(game: Game) -> Self
+impl UserAgent {
+    pub fn new(game: Game) -> Self
     where
         Self: Sized,
     {
         UserAgent { game }
     }
+}
 
+impl Agent for UserAgent {
     fn next_move(&mut self) {
         thread::sleep(Duration::from_millis(10));
     }

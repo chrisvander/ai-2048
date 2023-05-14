@@ -12,10 +12,13 @@ pub struct RandomAgent {
     game: Game,
 }
 
-impl Agent for RandomAgent {
-    fn new(game: Game) -> Self {
+impl RandomAgent {
+    pub fn new(game: Game) -> Self {
         RandomAgent { game }
     }
+}
+
+impl Agent for RandomAgent {
 
     fn next_move(&mut self) {
         self.game.update(match fastrand::usize(0..4) {
@@ -61,6 +64,14 @@ pub enum RandomTreeMetric {
 }
 
 impl RandomTree {
+    pub fn new(game: Game) -> Self {
+        RandomTree {
+            game,
+            sim_count: 1000,
+            metric: RandomTreeMetric::AvgScore,
+            last_scores: MoveScores::default(),
+        }
+    }
     pub fn new_with(game: Game, metric: RandomTreeMetric) -> Self {
         let mut ag = RandomTree::new(game);
         ag.metric = metric;
@@ -69,15 +80,6 @@ impl RandomTree {
 }
 
 impl Agent for RandomTree {
-    fn new(game: Game) -> Self {
-        RandomTree {
-            game,
-            sim_count: 1000,
-            metric: RandomTreeMetric::AvgScore,
-            last_scores: MoveScores::default(),
-        }
-    }
-
     fn next_move(&mut self) {
         let mut scores = MoveScores::default();
         for game_move in Move::iter() {

@@ -11,8 +11,8 @@ pub struct Expectimax {
     scores: MoveScores,
 }
 
-impl Agent for Expectimax {
-    fn new(game: Game) -> Self
+impl Expectimax {
+    pub fn new(game: Game) -> Self
     where
         Self: Sized,
     {
@@ -22,7 +22,9 @@ impl Agent for Expectimax {
             scores: MoveScores::default(),
         }
     }
+}
 
+impl Agent for Expectimax {
     fn next_move(&mut self) {
         todo!()
     }

@@ -2,12 +2,19 @@ use crate::agent::{random::RandomAgent, Agent};
 use crate::game::*;
 
 use agent::random::{RandomTree, RandomTreeMetric};
+use agent::rl::{RLAgent, RLAgentTrained, STORE_PATH};
 use agent::user::UserAgent;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use rurel::strategy::explore::RandomExploration;
+use rurel::strategy::learn::QLearning;
+use rurel::strategy::terminate::FixedIterations;
+use rurel::AgentTrainer;
+use std::fs::{File};
+use std::io::Write;
 use std::sync::RwLock;
 use std::thread::JoinHandle;
 use std::{error::Error, io, sync::Arc, thread, time::Duration};
@@ -29,6 +36,8 @@ static MENU_ITEMS: &[&str] = &[
     "Solve (Random)",
     "Solve (Tree Search, Max Score)",
     "Solve (Tree Search, Max Moves)",
+    "Train (RL)",
+    "Solve (RL)",
     "Solve (Expectimax)",
 ];
 
@@ -37,6 +46,7 @@ pub enum Screen {
         state: ListState,
         menu: List<'static>,
     },
+    Train(JoinHandle<()>),
     // join handle for multithreading if needed
     Game(JoinHandle<()>, Arc<RwLock<Box<dyn Agent + Sync + Send>>>),
 }
@@ -155,6 +165,15 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
             f.render_widget(paragraph, chunks[1]);
         }
+        Screen::Train(_) => {
+            let block = Block::default().title("Training").borders(Borders::ALL);
+            let text = vec![
+                Spans::from("Training in progress..."),
+                Spans::from("Press q to exit"),
+            ];
+            let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
+            f.render_widget(paragraph, chunks[0]);
+        }
         Screen::Game(_, game_sim) => {
             let agent = game_sim.read().unwrap();
             let game = agent.get_game();
@@ -192,6 +211,12 @@ pub enum IntAction {
     Exit,
 }
 
+pub enum MenuItem {
+    Play(Box<dyn Agent + Sync + Send>),
+    Train,
+    Exit,
+}
+
 fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Error> {
     // each tick, lets see what screen we're at for interaction
     match &mut app.screen {
@@ -226,12 +251,41 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                 }
                 KeyCode::Enter => {
                     let game = Game::new();
-                    let agent: Box<dyn Agent + Sync + Send> = match state.selected() {
-                        Some(0) => Box::new(UserAgent::new(game)),
-                        Some(1) => Box::new(RandomAgent::new(game)),
-                        Some(2) => Box::new(RandomTree::new(game)),
-                        Some(3) => Box::new(RandomTree::new_with(game, RandomTreeMetric::AvgMoves)),
+                    let item: MenuItem = match state.selected() {
+                        Some(0) => MenuItem::Play(Box::new(UserAgent::new(game))),
+                        Some(1) => MenuItem::Play(Box::new(RandomAgent::new(game))),
+                        Some(2) => MenuItem::Play(Box::new(RandomTree::new(game))),
+                        Some(3) => MenuItem::Play(Box::new(RandomTree::new_with(
+                            game,
+                            RandomTreeMetric::AvgMoves,
+                        ))),
+                        Some(4) => MenuItem::Train,
+                        Some(5) => MenuItem::Play(Box::new(RLAgentTrained::new(game))),
                         _ => panic!(),
+                    };
+
+                    let MenuItem::Play(agent) = item else {
+                        match item {
+                            MenuItem::Train => {
+                                let t = thread::spawn(move || {
+                                    let mut trainer = AgentTrainer::new();
+                                    let mut agent = RLAgent::new(Game::new());
+                                    trainer.train(&mut agent, &QLearning::new(0.2, 0.01, 2.), &mut FixedIterations::new(1000000), &RandomExploration::new());
+                                    // write out to file
+                                    let mut file = File::create(STORE_PATH).unwrap();
+                                    let Ok(res) = serde_json::to_string(&trainer.export_learned_values()) else {
+                                        return;
+                                    };
+                                    file.write_all(res.as_bytes()).unwrap();
+                                });
+                                app.screen = Screen::Train(t);
+                            }
+                            MenuItem::Exit => {
+                                return Ok(IntAction::Exit);
+                            }
+                            _ => {}
+                        };
+                        return Ok(IntAction::Continue);
                     };
 
                     let agent = Arc::new(RwLock::new(agent));
@@ -241,7 +295,27 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                             agent.write().unwrap().next_move();
                         }
                     });
+
                     app.screen = Screen::Game(t, local_agent);
+                }
+                _ => {}
+            };
+        }
+        Screen::Train(t) => {
+            if t.is_finished() {
+                return Ok(IntAction::Exit);
+            }
+
+            if !event::poll(timeout)? {
+                return Ok(IntAction::Continue);
+            }
+            let event = event::read()?;
+            let Event::Key(key_event) =  event else {
+                return Ok(IntAction::Continue);
+            };
+            match key_event.code {
+                KeyCode::Char('q') => {
+                    return Ok(IntAction::Exit);
                 }
                 _ => {}
             };
@@ -283,7 +357,7 @@ fn run_tui<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
             IntAction::Continue => {}
             IntAction::Exit => match app.screen {
                 Screen::Menu { state: _, menu: _ } => break,
-                Screen::Game(_, _) => {
+                Screen::Game(_, _) | Screen::Train(_) => {
                     app.screen = Screen::default();
                     continue;
                 }

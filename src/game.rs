@@ -1,8 +1,10 @@
 use core::fmt;
 
 use enum_map::Enum;
+use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Game {
     state: [u16; 16],
     score: usize,
@@ -32,7 +34,7 @@ impl Clone for Game {
     }
 }
 
-#[derive(Enum, EnumIter, Debug, PartialEq, Clone, Copy)]
+#[derive(Enum, EnumIter, Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum Move {
     Up,
     Down,

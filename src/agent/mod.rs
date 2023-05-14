@@ -3,6 +3,7 @@ use tui::text::Spans;
 use crate::game::{Game, Move};
 
 pub mod random;
+pub mod expectimax;
 
 pub trait Agent {
     fn new() -> Self

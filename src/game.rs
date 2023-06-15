@@ -4,9 +4,9 @@ use enum_map::Enum;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
-#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct Game {
-    state: [u16; 16],
+    state: [u8; 16],
     score: usize,
     num_moves: usize,
 }
@@ -21,16 +21,6 @@ impl Default for Game {
         g.generate_tile();
         g.generate_tile();
         g
-    }
-}
-
-impl Clone for Game {
-    fn clone(&self) -> Self {
-        Game {
-            state: self.state,
-            score: self.score,
-            num_moves: self.num_moves,
-        }
     }
 }
 
@@ -53,7 +43,12 @@ impl fmt::Display for Move {
     }
 }
 
-fn merge_duplicates<F>(v: &Vec<u16>, mut f: F) -> Vec<u16>
+/// This function generates a new tile in a random empty spot. The new tile
+/// will be a 2 with 90% probability and a 4 with 10% probability.
+///
+/// * `v`: the current state of the game
+/// * `f`: a function to call when a new tile is generated
+fn merge_duplicates<F>(v: &Vec<u8>, mut f: F) -> Vec<u8>
 where
     F: FnMut(usize) -> (),
 {
@@ -81,6 +76,12 @@ impl Game {
         Game::default()
     }
 
+    pub fn new_from(state: [u8; 16]) -> Self {
+        let mut game = Game::default();
+        game.state = state;
+        game
+    }
+
     pub fn update(&mut self, input: Move) -> bool {
         let state_before = self.state.clone();
         self.shift(input);
@@ -97,11 +98,17 @@ impl Game {
         (x + y * 4) as usize
     }
 
-    pub fn get_tile(&self, x: u8, y: u8) -> u16 {
+    pub fn is_available_move(&self, input: Move) -> bool {
+        let mut g = self.clone();
+        g.shift(input);
+        g.state != self.state
+    }
+
+    pub fn get_tile(&self, x: u8, y: u8) -> u8 {
         self.state[Game::xy_to_index(x, y)]
     }
 
-    pub fn set_tile(&mut self, x: u8, y: u8, value: u16) {
+    pub fn set_tile(&mut self, x: u8, y: u8, value: u8) {
         self.state[Game::xy_to_index(x, y)] = value;
     }
 
@@ -146,15 +153,15 @@ impl Game {
         &self.score
     }
 
-    pub fn get_state(&self) -> &[u16; 16] {
+    pub fn get_state(&self) -> &[u8; 16] {
         &self.state
     }
 
-    pub fn set_state(&mut self, s: [u16; 16]) {
+    pub fn set_state(&mut self, s: [u8; 16]) {
         self.state = s;
     }
 
-    fn get_condensed_rows(&self) -> Vec<Vec<u16>> {
+    fn get_condensed_rows(&self) -> Vec<Vec<u8>> {
         // get vec of rows with empty removed
         self.state
             .chunks(4)
@@ -162,7 +169,7 @@ impl Game {
             .collect()
     }
 
-    fn get_condensed_cols(&self) -> Vec<Vec<u16>> {
+    fn get_condensed_cols(&self) -> Vec<Vec<u8>> {
         // get vec of cols with empty removed
         self.state
             .iter()
@@ -181,7 +188,7 @@ impl Game {
             Move::Left | Move::Right => self.get_condensed_rows(),
         };
 
-        let new_state: [u16; 16] = condensed
+        let new_state: [u8; 16] = condensed
             .iter()
             .map(|v| merge_duplicates(v, |s| self.score += s))
             .map(|mut v| {
@@ -210,7 +217,7 @@ impl Game {
     }
 
     fn generate_tile(&mut self) {
-        let n = fastrand::u16(1..=2);
+        let n = fastrand::u8(1..=2);
 
         // get indexes of empty tiles
         let empty_indexes = self

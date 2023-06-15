@@ -2,7 +2,7 @@ use crate::agent::{random::RandomAgent, Agent};
 use crate::game::*;
 
 use agent::random::{RandomTree, RandomTreeMetric};
-use agent::rl::{RLAgent, RLAgentTrained, STORE_PATH};
+use agent::rl::{get_trainer, RLAgent, RLAgentTrained};
 use agent::user::UserAgent;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -11,9 +11,9 @@ use crossterm::{
 };
 use rurel::strategy::explore::RandomExploration;
 use rurel::strategy::learn::QLearning;
-use rurel::strategy::terminate::FixedIterations;
+use rurel::strategy::terminate::SinkStates;
 use rurel::AgentTrainer;
-use std::fs::{File};
+use std::fs::File;
 use std::io::Write;
 use std::sync::RwLock;
 use std::thread::JoinHandle;
@@ -160,6 +160,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             let block = Block::default().title("Info").borders(Borders::ALL);
             let text = vec![
                 Spans::from("Use arrow keys to navigate"),
+                Spans::from(format!("Writing to {}", agent::rl::data_file_path())),
                 Spans::from("Press q to exit"),
             ];
             let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
@@ -268,14 +269,14 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                         match item {
                             MenuItem::Train => {
                                 let t = thread::spawn(move || {
-                                    let mut trainer = AgentTrainer::new();
-                                    let mut agent = RLAgent::new(Game::new());
-                                    trainer.train(&mut agent, &QLearning::new(0.2, 0.01, 2.), &mut FixedIterations::new(1000000), &RandomExploration::new());
+                                    let mut trainer = get_trainer();
+                                    for _ in 0..10000 {
+                                        let mut agent = RLAgent::new(Game::new());
+                                        trainer.train(&mut agent, &QLearning::new(0.2, 0.01, 2.), &mut SinkStates {}, &RandomExploration::new());
+                                    }
                                     // write out to file
-                                    let mut file = File::create(STORE_PATH).unwrap();
-                                    let Ok(res) = serde_json::to_string(&trainer.export_learned_values()) else {
-                                        return;
-                                    };
+                                    let mut file = File::create(agent::rl::data_file_path()).unwrap();
+                                    let res = ron::to_string(&trainer.export_learned_values()).unwrap();
                                     file.write_all(res.as_bytes()).unwrap();
                                 });
                                 app.screen = Screen::Train(t);

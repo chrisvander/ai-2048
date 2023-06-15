@@ -19,7 +19,6 @@ impl RandomAgent {
 }
 
 impl Agent for RandomAgent {
-
     fn next_move(&mut self) {
         self.game.update(match fastrand::usize(0..4) {
             0 => Move::Up,
@@ -28,6 +27,7 @@ impl Agent for RandomAgent {
             3 => Move::Right,
             _ => unreachable!(),
         });
+
     }
 
     fn get_game(&self) -> &Game {

@@ -12,12 +12,12 @@ use crossterm::{
 use rurel::strategy::explore::RandomExploration;
 use rurel::strategy::learn::QLearning;
 use rurel::strategy::terminate::SinkStates;
-use rurel::AgentTrainer;
 use std::fs::File;
 use std::io::Write;
 use std::sync::RwLock;
 use std::thread::JoinHandle;
 use std::{error::Error, io, sync::Arc, thread, time::Duration};
+use tui::widgets::{StatefulWidget, Widget};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout, Rect},
@@ -101,7 +101,7 @@ fn get_color_for_value(v: u32) -> Color {
     }
 }
 
-fn render_table_cell(c: &u32) -> Cell<'_> {
+fn get_table_cell(c: &u32) -> Cell<'_> {
     let cstr = if *c == 1 {
         String::from("")
     } else {
@@ -118,11 +118,12 @@ fn render_table_cell(c: &u32) -> Cell<'_> {
     Cell::from(Text::from(cell_body)).style(cell_style)
 }
 
-fn render_game<B: Backend>(f: &mut Frame<B>, block: Block<'_>, game: &Game, rect: Rect) {
+fn render_board<B: Backend>(f: &mut Frame<B>, game: &Game, rect: Rect) {
+    let block = Block::default().title("Game").borders(Borders::ALL);
     let game_state = game.get_table();
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
     let rows = game_state.iter().map(|row| {
-        let row = row.iter().map(render_table_cell);
+        let row = row.iter().map(get_table_cell);
         Row::new(row).height(5).bottom_margin(1)
     });
     let t = Table::new(rows)
@@ -139,6 +140,63 @@ fn render_game<B: Backend>(f: &mut Frame<B>, block: Block<'_>, game: &Game, rect
     f.render_widget(t, rect);
 }
 
+fn get_menu<'a>(menu: &List<'a>) -> impl StatefulWidget<State = ListState> + 'a {
+    let block = Block::default().title("Menu").borders(Borders::ALL);
+    let list = menu
+        .clone()
+        .block(block)
+        .highlight_style(Style::default().fg(Color::Yellow))
+        .highlight_symbol(">> ");
+    list
+}
+
+fn get_menu_text() -> impl Widget {
+    let block = Block::default().title("Info").borders(Borders::ALL);
+    let text = vec![
+        Spans::from("Use arrow keys to navigate"),
+        Spans::from(format!("Writing to {}", agent::rl::data_file_path())),
+        Spans::from("Press q to exit"),
+    ];
+    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
+    paragraph
+}
+
+fn get_train_text() -> impl Widget {
+    let block = Block::default().title("Training").borders(Borders::ALL);
+    let text = vec![
+        Spans::from("Training in progress..."),
+        Spans::from("Press q to exit"),
+    ];
+    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
+    paragraph
+}
+
+fn get_game_text<'a>(game: &Game, mut agent_spans: Vec<Spans<'a>>) -> impl Widget + 'a {
+    let block = Block::default().title("Info").borders(Borders::ALL);
+    let game_over_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
+    let bold_span = |s| Span::styled(s, Style::default().add_modifier(Modifier::BOLD));
+    let mut text = vec![
+        Spans::from(vec![
+            bold_span("Score: "),
+            Span::from(game.get_score().to_string()),
+        ]),
+        Spans::from(vec![
+            bold_span("Moves: "),
+            Span::from(game.get_num_moves().to_string()),
+        ]),
+        Spans::from(if game.game_over() {
+            Span::styled("Game over.", game_over_style)
+        } else {
+            Span::from("")
+        }),
+        Spans::from(""),
+    ];
+    text.append(&mut agent_spans);
+    text.append(&mut vec![Spans::from(""), Spans::from("Press q to exit")]);
+    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
+    paragraph
+}
+
 fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -148,61 +206,15 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     match &mut app.screen {
         Screen::Menu { state, menu } => {
-            let block = Block::default().title("Menu").borders(Borders::ALL);
-            let list = menu
-                .clone()
-                .block(block)
-                .highlight_style(Style::default().fg(Color::Yellow))
-                .highlight_symbol(">> ");
-
-            f.render_stateful_widget(list, chunks[0], state);
-
-            let block = Block::default().title("Info").borders(Borders::ALL);
-            let text = vec![
-                Spans::from("Use arrow keys to navigate"),
-                Spans::from(format!("Writing to {}", agent::rl::data_file_path())),
-                Spans::from("Press q to exit"),
-            ];
-            let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
-            f.render_widget(paragraph, chunks[1]);
+            f.render_widget(get_menu_text(), chunks[0]);
+            f.render_stateful_widget(get_menu(menu), chunks[1], state);
         }
-        Screen::Train(_) => {
-            let block = Block::default().title("Training").borders(Borders::ALL);
-            let text = vec![
-                Spans::from("Training in progress..."),
-                Spans::from("Press q to exit"),
-            ];
-            let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
-            f.render_widget(paragraph, chunks[0]);
-        }
+        Screen::Train(_) => f.render_widget(get_train_text(), chunks[0]),
         Screen::Game(_, game_sim) => {
             let agent = game_sim.read().unwrap();
             let game = agent.get_game();
-            let game_block = Block::default().title("Game").borders(Borders::ALL);
-            render_game(f, game_block, &game, chunks[0]);
-            let block = Block::default().title("Info").borders(Borders::ALL);
-            let game_over_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
-            let bold_span = |s| Span::styled(s, Style::default().add_modifier(Modifier::BOLD));
-            let mut text = vec![
-                Spans::from(vec![
-                    bold_span("Score: "),
-                    Span::from(game.get_score().to_string()),
-                ]),
-                Spans::from(vec![
-                    bold_span("Moves: "),
-                    Span::from(game.get_num_moves().to_string()),
-                ]),
-                Spans::from(if game.game_over() {
-                    Span::styled("Game over.", game_over_style)
-                } else {
-                    Span::from("")
-                }),
-                Spans::from(""),
-            ];
-            text.append(&mut agent.messages());
-            text.append(&mut vec![Spans::from(""), Spans::from("Press q to exit")]);
-            let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
-            f.render_widget(paragraph, chunks[1]);
+            render_board(f, &game, chunks[0]);
+            f.render_widget(get_game_text(&game, agent.messages()), chunks[1]);
         }
     }
 }

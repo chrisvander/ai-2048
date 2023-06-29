@@ -2,7 +2,7 @@ use core::fmt;
 
 use enum_map::Enum;
 use serde::{Deserialize, Serialize};
-use strum_macros::EnumIter;
+use strum_macros::{Display, EnumIter};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct Game {
@@ -24,23 +24,14 @@ impl Default for Game {
     }
 }
 
-#[derive(Enum, EnumIter, Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[derive(
+    Enum, EnumIter, Debug, PartialEq, Eq, Hash, Clone, Copy, Display, Serialize, Deserialize,
+)]
 pub enum Move {
     Up,
     Down,
     Left,
     Right,
-}
-
-impl fmt::Display for Move {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Move::Up => write!(f, "Up"),
-            Move::Down => write!(f, "Down"),
-            Move::Left => write!(f, "Left"),
-            Move::Right => write!(f, "Right"),
-        }
-    }
 }
 
 /// This function generates a new tile in a random empty spot. The new tile

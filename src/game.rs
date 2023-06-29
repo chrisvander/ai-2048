@@ -1,8 +1,6 @@
-use core::fmt;
-
 use enum_map::Enum;
-use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct Game {

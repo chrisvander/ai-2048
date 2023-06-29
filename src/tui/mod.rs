@@ -1,7 +1,7 @@
 use crate::agent::random::{RandomAgent, RandomTree, RandomTreeMetric};
 use crate::agent::rl::{get_trainer, RLAgent, RLAgentTrained};
 use crate::agent::user::UserAgent;
-use crate::agent::{TuiAgent};
+use crate::agent::TuiAgent;
 use crate::game::*;
 
 use crossterm::{
@@ -17,26 +17,20 @@ use std::io::Write;
 use std::sync::RwLock;
 use std::thread::JoinHandle;
 use std::{error::Error, io, sync::Arc, thread, time::Duration};
-use tui::widgets::{StatefulWidget, Widget};
+use tui::widgets::Widget;
 use tui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{Span, Spans, Text},
-    widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, Wrap},
+    text::{Span, Spans},
+    widgets::{Block, Borders, List, ListState, Paragraph, Wrap},
     Frame, Terminal,
 };
 
+mod board;
+mod menu;
+
 static TICK_RATE: Duration = Duration::from_millis(50);
-static MENU_ITEMS: &[&str] = &[
-    "Play (Keyboard)",
-    "Solve (Random)",
-    "Solve (Tree Search, Max Score)",
-    "Solve (Tree Search, Max Moves)",
-    "Train (RL)",
-    "Solve (RL)",
-    "Solve (Expectimax)",
-];
 
 pub enum Screen {
     Menu {
@@ -53,102 +47,16 @@ impl Default for Screen {
         let mut state = ListState::default();
         state.select(Some(0));
 
-        let menu = List::new(
-            MENU_ITEMS
-                .iter()
-                .map(|s| ListItem::new(*s))
-                .collect::<Vec<ListItem<'static>>>(),
-        );
-
-        Screen::Menu { state, menu }
+        Screen::Menu {
+            state,
+            menu: menu::MENU.clone(),
+        }
     }
 }
 
 #[derive(Default)]
 pub struct App {
     screen: Screen,
-}
-
-fn get_color_for_value(v: u32) -> Color {
-    match v {
-        2 => Color::Rgb(238, 228, 218),
-        4 => Color::Rgb(237, 224, 200),
-        8 => Color::Rgb(242, 177, 121),
-        16 => Color::Rgb(245, 149, 99),
-        32 => Color::Rgb(246, 124, 95),
-        64 => Color::Rgb(246, 94, 59),
-        128 => Color::Rgb(237, 207, 114),
-        256 => Color::Rgb(237, 204, 97),
-        512 => Color::Rgb(237, 200, 80),
-        1024 => Color::Rgb(237, 197, 63),
-        2048 => Color::Rgb(237, 194, 46),
-        4096 => Color::Rgb(173, 183, 119),
-        8192 => Color::Rgb(170, 183, 102),
-        16384 => Color::Rgb(166, 183, 85),
-        32768 => Color::Rgb(163, 183, 68),
-        65536 => Color::Rgb(160, 183, 51),
-        _ => Color::DarkGray,
-    }
-}
-
-fn get_table_cell(c: &u32) -> Cell<'_> {
-    let cstr = if *c == 1 {
-        String::from("")
-    } else {
-        c.to_string()
-    };
-
-    let cell_style = Style::default()
-        .add_modifier(Modifier::BOLD)
-        .bg(get_color_for_value(*c));
-
-    let front_padding = " ".repeat(5 - (cstr.len() / 2));
-    let cell_body = ["\n\n", front_padding.as_str(), cstr.as_str(), "\n\n"].join("");
-
-    Cell::from(Text::from(cell_body)).style(cell_style)
-}
-
-fn render_board<B: Backend>(f: &mut Frame<B>, game: &Game, rect: Rect) {
-    let block = Block::default().title("Game").borders(Borders::ALL);
-    let game_state = game.get_table();
-    let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-    let rows = game_state.iter().map(|row| {
-        let row = row.iter().map(get_table_cell);
-        Row::new(row).height(5).bottom_margin(1)
-    });
-    let t = Table::new(rows)
-        .block(block)
-        .highlight_style(selected_style)
-        .highlight_symbol(">> ")
-        .widths(&[
-            Constraint::Length(11),
-            Constraint::Length(11),
-            Constraint::Length(11),
-            Constraint::Length(11),
-        ]);
-
-    f.render_widget(t, rect);
-}
-
-fn get_menu<'a>(menu: &List<'a>) -> impl StatefulWidget<State = ListState> + 'a {
-    let block = Block::default().title("Menu").borders(Borders::ALL);
-    let list = menu
-        .clone()
-        .block(block)
-        .highlight_style(Style::default().fg(Color::Yellow))
-        .highlight_symbol(">> ");
-    list
-}
-
-fn get_menu_text() -> impl Widget {
-    let block = Block::default().title("Info").borders(Borders::ALL);
-    let text = vec![
-        Spans::from("Use arrow keys to navigate"),
-        Spans::from(format!("Writing to {}", crate::agent::rl::data_file_path())),
-        Spans::from("Press q to exit"),
-    ];
-    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
-    paragraph
 }
 
 fn get_train_text() -> impl Widget {
@@ -196,14 +104,14 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     match &mut app.screen {
         Screen::Menu { state, menu } => {
-            f.render_stateful_widget(get_menu(menu), chunks[0], state);
-            f.render_widget(get_menu_text(), chunks[1]);
+            f.render_stateful_widget(menu::get_menu(menu), chunks[0], state);
+            f.render_widget(menu::get_menu_text(), chunks[1]);
         }
         Screen::Train(_) => f.render_widget(get_train_text(), chunks[0]),
         Screen::Game(_, game_sim) => {
             let agent = game_sim.read().unwrap();
             let game = agent.get_game();
-            render_board(f, &game, chunks[0]);
+            board::render_board(f, &game, chunks[0]);
             f.render_widget(get_game_text(&game, agent.messages()), chunks[1]);
         }
     }
@@ -248,7 +156,7 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                         state.select(Some(0));
                         return Ok(IntAction::Continue);
                     };
-                    if sel < MENU_ITEMS.len() - 1 {
+                    if sel < menu::MENU_ITEMS.len() - 1 {
                         state.select(Some(sel + 1));
                     }
                 }

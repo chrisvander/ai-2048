@@ -1,10 +1,7 @@
+use ai_2048;
 use std::error::Error;
 
-pub mod agent;
-pub mod game;
-mod tui;
-
 fn main() -> Result<(), Box<dyn Error>> {
-    tui::start()?;
+    ai_2048::tui::start()?;
     Ok(())
 }

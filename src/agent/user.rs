@@ -1,13 +1,12 @@
-use std::{thread, time::Duration};
-
-use crossterm::event::{Event, KeyCode};
-
 use crate::{
     game::{Game, Move},
-    IntAction,
+    tui::IntAction,
 };
 
-use super::Agent;
+use super::{Agent, TuiAgent};
+
+use crossterm::event::{Event, KeyCode};
+use std::{thread, time::Duration};
 
 pub struct UserAgent {
     game: Game,
@@ -30,7 +29,9 @@ impl Agent for UserAgent {
     fn get_game(&self) -> &Game {
         &self.game
     }
+}
 
+impl TuiAgent for UserAgent {
     fn messages(&self) -> Vec<tui::text::Spans> {
         vec![tui::text::Spans::from("Use WASD or arrow keys to move.")]
     }

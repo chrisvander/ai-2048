@@ -7,6 +7,8 @@ use strum::IntoEnumIterator;
 use tui::style::{Color, Modifier, Style};
 use tui::text::{Span, Spans};
 
+use super::TuiAgent;
+
 // Basic random agent, randomly selects an action and takes the move.
 pub struct RandomAgent {
     game: Game,
@@ -27,13 +29,14 @@ impl Agent for RandomAgent {
             3 => Move::Right,
             _ => unreachable!(),
         });
-
     }
 
     fn get_game(&self) -> &Game {
         &self.game
     }
+}
 
+impl TuiAgent for RandomAgent {
     fn messages(&self) -> Vec<Spans> {
         vec![Spans::from("Performing random actions.")]
     }
@@ -113,7 +116,9 @@ impl Agent for RandomTree {
     fn get_game(&self) -> &Game {
         &self.game
     }
+}
 
+impl TuiAgent for RandomTree {
     fn messages(&self) -> Vec<Spans> {
         let highest_move = self
             .last_scores

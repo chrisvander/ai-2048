@@ -14,7 +14,7 @@ use tui::{
 
 use crate::game::{Game, Move};
 
-use super::Agent as GameAgent;
+use super::{Agent as GameAgent, TuiAgent};
 
 pub fn data_file_path() -> String {
     let mut path = choose_base_strategy().unwrap().data_dir();
@@ -136,7 +136,9 @@ impl GameAgent for RLAgentTrained {
     fn get_game(&self) -> &Game {
         &self.game
     }
+}
 
+impl TuiAgent for RLAgentTrained {
     fn messages(&self) -> Vec<Spans<'_>> {
         let highest_move = self
             .last_scores

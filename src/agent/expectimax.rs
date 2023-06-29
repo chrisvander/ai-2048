@@ -2,7 +2,7 @@ use enum_map::EnumMap;
 
 use crate::game::{Game, Move};
 
-use super::Agent;
+use super::{Agent, TuiAgent};
 
 type MoveScores = EnumMap<Move, usize>;
 pub struct Expectimax {
@@ -32,7 +32,9 @@ impl Agent for Expectimax {
     fn get_game(&self) -> &Game {
         &self.game
     }
+}
 
+impl TuiAgent for Expectimax {
     fn messages(&self) -> Vec<tui::text::Spans> {
         todo!()
     }

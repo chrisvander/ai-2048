@@ -1,6 +1,6 @@
 use enum_map::Enum;
-use strum_macros::{Display, EnumIter};
 use serde::{Deserialize, Serialize};
+use strum_macros::{Display, EnumIter};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct Game {
@@ -61,6 +61,11 @@ where
 }
 
 impl Game {
+    pub fn new_seeded(seed: u64) -> Self {
+        fastrand::seed(seed);
+        Game::default()
+    }
+
     pub fn new() -> Self {
         Game::default()
     }

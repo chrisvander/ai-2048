@@ -51,10 +51,6 @@ pub enum Screen {
     Game(JoinHandle<()>, Arc<RwLock<Box<dyn Agent + Sync + Send>>>),
 }
 
-pub struct App {
-    screen: Screen,
-}
-
 impl Default for Screen {
     fn default() -> Self {
         let mut state = ListState::default();
@@ -71,12 +67,9 @@ impl Default for Screen {
     }
 }
 
-impl Default for App {
-    fn default() -> Self {
-        App {
-            screen: Screen::default(),
-        }
-    }
+#[derive(Default)]
+pub struct App {
+    screen: Screen,
 }
 
 fn get_color_for_value(v: u32) -> Color {

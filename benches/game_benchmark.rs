@@ -15,7 +15,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             },
             |mut agent| {
                 while !agent.get_game().game_over() {
-                    agent.next_move();
+                    agent.make_move();
                 }
             },
             BatchSize::SmallInput,
@@ -28,16 +28,16 @@ fn criterion_benchmark(c: &mut Criterion) {
                 let mut game = black_box(Game::new_seeded(0));
                 // spin the board around a bit
                 for _ in 0..10 {
-                    game.update(Move::Up);
-                    game.update(Move::Left);
-                    game.update(Move::Right);
-                    game.update(Move::Down);
+                    game.make_move(Move::Up);
+                    game.make_move(Move::Left);
+                    game.make_move(Move::Right);
+                    game.make_move(Move::Down);
                 }
                 game
             },
             |mut game| {
-                game.update(black_box(Move::Left));
-                game.update(black_box(Move::Right));
+                game.make_move(black_box(Move::Left));
+                game.make_move(black_box(Move::Right));
             },
             BatchSize::SmallInput,
         )
@@ -49,16 +49,16 @@ fn criterion_benchmark(c: &mut Criterion) {
                 let mut game = black_box(Game::new_seeded(0));
                 // spin the board around a bit
                 for _ in 0..10 {
-                    game.update(Move::Up);
-                    game.update(Move::Left);
-                    game.update(Move::Right);
-                    game.update(Move::Down);
+                    game.make_move(Move::Up);
+                    game.make_move(Move::Left);
+                    game.make_move(Move::Right);
+                    game.make_move(Move::Down);
                 }
                 game
             },
             |mut game| {
-                game.update(black_box(Move::Up));
-                game.update(black_box(Move::Down));
+                game.make_move(black_box(Move::Up));
+                game.make_move(black_box(Move::Down));
             },
             BatchSize::SmallInput,
         )

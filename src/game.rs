@@ -186,12 +186,13 @@ impl Game {
             .iter()
             .map(|v| self.merge_duplicates(v, true))
             .map(|v| {
-                if input == Move::Up || input == Move::Left {
-                    return v;
+                if input == Move::Up || input == Move::Left || !v.contains(&0) {
+                    v
+                } else {
+                    // swap where 0's are
+                    let sp = v.iter().position(|n| *n == 0).unwrap_or(3);
+                    [&v[sp..], &v[0..sp]].concat().try_into().unwrap()
                 }
-                // swap where 0's are
-                let sp = v.iter().position(|n| *n == 0).unwrap_or(3);
-                [&v[sp..], &v[0..sp]].concat().try_into().unwrap()
             })
             .flatten()
             .enumerate()

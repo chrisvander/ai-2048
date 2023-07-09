@@ -21,9 +21,7 @@ impl RandomAgent {
 
     pub fn new_seeded(seed: u64, game: Game) -> Self {
         fastrand::seed(seed);
-        RandomAgent {
-            game,
-        }
+        RandomAgent { game }
     }
 }
 

@@ -1,13 +1,12 @@
 use crate::agent::Agent;
 use crate::game::{Game, Move};
 
-use enum_map::EnumMap;
 use rayon::prelude::*;
 use strum::IntoEnumIterator;
 use tui::style::{Color, Modifier, Style};
 use tui::text::{Span, Spans};
 
-use super::TuiAgent;
+use super::{MaxMove, MoveScores, TuiAgent};
 
 // Basic random agent, randomly selects an action and takes the move.
 pub struct RandomAgent {
@@ -26,14 +25,18 @@ impl RandomAgent {
 }
 
 impl Agent for RandomAgent {
-    fn next_move(&mut self) {
-        self.game.update(match fastrand::usize(0..4) {
+    fn next_move(&self) -> Move {
+        match fastrand::usize(0..4) {
             0 => Move::Up,
             1 => Move::Down,
             2 => Move::Left,
             3 => Move::Right,
             _ => unreachable!(),
-        });
+        }
+    }
+
+    fn make_move(&mut self) {
+        self.game.make_move(self.next_move());
     }
 
     fn get_game(&self) -> &Game {
@@ -48,17 +51,16 @@ impl TuiAgent for RandomAgent {
 }
 
 // Use a RandomAgent to simulate a full game from a starting point
-fn simulate_random_game(game: Game) -> Game {
+pub fn simulate_random_game(game: Game) -> Game {
     let mut agent = RandomAgent::new(game);
     while !agent.get_game().game_over() {
-        agent.next_move();
+        agent.make_move();
     }
     agent.game
 }
 
 // Random tree search, simulate many games per move and then select the move based on the highest
 // average score.
-type MoveScores = EnumMap<Move, usize>;
 pub struct RandomTree {
     game: Game,
     sim_count: usize,
@@ -80,19 +82,19 @@ impl RandomTree {
             last_scores: MoveScores::default(),
         }
     }
-    pub fn new_with(game: Game, metric: RandomTreeMetric) -> Self {
+
+    pub fn new_with(game: Game, sim_count: usize, metric: RandomTreeMetric) -> Self {
         let mut ag = RandomTree::new(game);
+        ag.sim_count = sim_count;
         ag.metric = metric;
         ag
     }
-}
 
-impl Agent for RandomTree {
-    fn next_move(&mut self) {
+    pub fn score_moves(&self) -> MoveScores {
         let mut scores = MoveScores::default();
         for game_move in Move::iter() {
             let mut sim_game = self.game.clone();
-            let test = sim_game.update(game_move);
+            let test = sim_game.make_move(game_move);
             if !test {
                 continue;
             }
@@ -101,7 +103,7 @@ impl Agent for RandomTree {
                 .par_iter()
                 .map(|_| {
                     let mut sim_game = self.game.clone();
-                    sim_game.update(game_move);
+                    sim_game.make_move(game_move);
                     let game = simulate_random_game(sim_game);
                     match self.metric {
                         RandomTreeMetric::AvgMoves => game.get_num_moves().clone(),
@@ -113,9 +115,20 @@ impl Agent for RandomTree {
             scores[game_move] = score;
         }
 
+        scores
+    }
+}
+
+impl Agent for RandomTree {
+    fn next_move(&self) -> Move {
+        let scores = self.score_moves();
+        scores.max_move()
+    }
+
+    fn make_move(&mut self) {
+        let scores = self.score_moves();
         self.last_scores = scores;
-        self.game
-            .update(scores.iter().max_by_key(|(_, score)| *score).unwrap().0);
+        self.game.make_move(scores.max_move());
     }
 
     fn get_game(&self) -> &Game {

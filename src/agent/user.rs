@@ -22,7 +22,11 @@ impl UserAgent {
 }
 
 impl Agent for UserAgent {
-    fn next_move(&mut self) {
+    fn next_move(&self) -> Move {
+        unimplemented!();
+    }
+
+    fn make_move(&mut self) {
         thread::sleep(Duration::from_millis(10));
     }
 
@@ -56,7 +60,7 @@ impl TuiAgent for UserAgent {
         };
 
         // synchronously update the game
-        self.game.update(keyboard_move);
+        self.game.make_move(keyboard_move);
         IntAction::Continue
     }
 }

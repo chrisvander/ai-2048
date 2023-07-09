@@ -1,3 +1,4 @@
+use crate::agent::expectimax::Expectimax;
 use crate::agent::random::{RandomAgent, RandomTree, RandomTreeMetric};
 use crate::agent::user::UserAgent;
 use crate::agent::TuiAgent;
@@ -162,8 +163,10 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                         Some(2) => MenuItem::Play(Box::new(RandomTree::new(game))),
                         Some(3) => MenuItem::Play(Box::new(RandomTree::new_with(
                             game,
+                            1000,
                             RandomTreeMetric::AvgMoves,
                         ))),
+                        Some(4) => MenuItem::Play(Box::new(Expectimax::new(game))),
                         _ => panic!(),
                     };
 
@@ -178,7 +181,7 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                     let local_agent = agent.clone();
                     let t = thread::spawn(move || {
                         while !agent.read().unwrap().get_game().game_over() {
-                            agent.write().unwrap().next_move();
+                            agent.write().unwrap().make_move();
                         }
                     });
 

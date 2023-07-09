@@ -84,6 +84,7 @@ impl Game {
         if self.state.iter().any(|n| *n == 0) {
             return false;
         }
+
         // if any tile has a neighbor with the same value, game is not over
         // check rows
         for row in self.get_condensed_rows() {
@@ -93,6 +94,7 @@ impl Game {
                 }
             }
         }
+
         // check cols
         for col in self.get_condensed_cols() {
             for i in 0..3 {
@@ -101,7 +103,8 @@ impl Game {
                 }
             }
         }
-        return true;
+
+        true
     }
 
     pub fn get_num_moves(&self) -> &usize {
@@ -149,6 +152,15 @@ impl Game {
         v.iter().position(|n| *n == 0).unwrap_or(4)
     }
 
+    fn get_cols(&self) -> [[u8; 4]; 4] {
+        [
+            [self.state[0], self.state[4], self.state[8], self.state[12]],
+            [self.state[1], self.state[5], self.state[9], self.state[13]],
+            [self.state[2], self.state[6], self.state[10], self.state[14]],
+            [self.state[3], self.state[7], self.state[11], self.state[15]],
+        ]
+    }
+
     fn get_condensed_rows(&self) -> [[u8; 4]; 4] {
         // get vec of rows with empty removed
         self.state
@@ -164,13 +176,13 @@ impl Game {
 
     fn get_condensed_cols(&self) -> [[u8; 4]; 4] {
         // get vec of cols with empty removed
-        self.state
+        self.get_cols()
             .iter()
             .enumerate()
-            .fold([[0; 4]; 4], |mut acc, (i, n)| {
-                if *n != 0 {
-                    acc[i % 4][self.first_empty(&acc[i % 4])] = *n;
-                }
+            .fold([[0; 4]; 4], |mut acc, (i, col)| {
+                col.iter()
+                    .filter(|n| **n != 0)
+                    .for_each(|n| acc[i][self.first_empty(&acc[i])] = *n);
                 acc
             })
     }

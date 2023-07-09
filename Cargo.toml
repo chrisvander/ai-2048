@@ -27,7 +27,6 @@ linfa = "0.6.1"
 once_cell = "1.18.0"
 rayon = "1.7.0"
 ron = "0.8.0"
-rurel = "0.4.0"
 serde = { version = "1.0.163", features = ["derive"] }
 serde_with = "3.0.0"
 strum = "0.24.1"

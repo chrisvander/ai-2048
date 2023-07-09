@@ -5,7 +5,6 @@ edition = "2021"
 
 [lib]
 name = "ai_2048"
-src = "src/lib.rs"
 
 [[bin]]
 name = "ai_2048_cli"

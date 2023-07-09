@@ -129,7 +129,7 @@ impl Game {
         let mut j = 0;
         let mut r = [0; 4];
         while i < 4 {
-            if i < 3 && v[i] != 0 && v[i] == v[i + 1]{
+            if i < 3 && v[i] != 0 && v[i] == v[i + 1] {
                 r[j] = v[i] + 1;
                 if score {
                     self.score += 2_usize.pow(r[j] as u32);
@@ -181,37 +181,27 @@ impl Game {
             Move::Left | Move::Right => self.get_condensed_rows(),
         };
 
-        let mut new_state: [u8; 16] = condensed
+        let mut new_state: [u8; 16] = [0; 16];
+        condensed
             .iter()
             .map(|v| self.merge_duplicates(v, true))
             .map(|v| {
                 if input == Move::Up || input == Move::Left {
-                    v
-                } else {
-                    // swap where 0's are
-                    v.iter()
-                        .fold(vec![], |mut acc, &n| {
-                            if n != 0 {
-                                acc.push(n);
-                            } else {
-                                acc.insert(0, n);
-                            }
-                            acc
-                        })
-                        .try_into()
-                        .unwrap()
+                    return v;
                 }
+                // swap where 0's are
+                let sp = v.iter().position(|n| *n == 0).unwrap_or(3);
+                [&v[sp..], &v[0..sp]].concat().try_into().unwrap()
             })
             .flatten()
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
+            .enumerate()
+            .for_each(|(i, n)| new_state[i] = n);
 
         match input {
             Move::Up | Move::Down => {
                 let mut transposed = [0; 16];
                 transpose::transpose(&mut new_state, &mut transposed, 4, 4);
-                self.set_state(transposed.try_into().unwrap());
+                self.set_state(transposed);
             }
             Move::Left | Move::Right => self.set_state(new_state),
         }

@@ -65,7 +65,6 @@ impl Expectimax {
             .map(|game| {
                 if current_depth >= self.depth {
                     // if we ran out of search depth, let's run RandomTree to get scores
-                    dbg!("Loop");
                     let scores =
                         RandomTree::new_with(self.game.clone(), 10, RandomTreeMetric::AvgScore)
                             .score_moves();
@@ -112,8 +111,8 @@ impl Agent for Expectimax {
         self.game.make_move(scores.max_move());
     }
 
-    fn get_game(&mut self) -> &mut Game {
-        &mut self.game
+    fn get_game(&self) -> &Game {
+        &self.game
     }
 }
 

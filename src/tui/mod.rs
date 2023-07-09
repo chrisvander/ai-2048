@@ -1,5 +1,4 @@
 use crate::agent::random::{RandomAgent, RandomTree, RandomTreeMetric};
-use crate::agent::rl::{get_trainer, RLAgent, RLAgentTrained};
 use crate::agent::user::UserAgent;
 use crate::agent::TuiAgent;
 use crate::game::*;
@@ -9,11 +8,6 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use rurel::strategy::explore::RandomExploration;
-use rurel::strategy::learn::QLearning;
-use rurel::strategy::terminate::SinkStates;
-use std::fs::File;
-use std::io::Write;
 use std::sync::RwLock;
 use std::thread::JoinHandle;
 use std::{error::Error, io, sync::Arc, thread, time::Duration};
@@ -170,33 +164,14 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                             game,
                             RandomTreeMetric::AvgMoves,
                         ))),
-                        Some(4) => MenuItem::Train,
-                        Some(5) => MenuItem::Play(Box::new(RLAgentTrained::new(game))),
                         _ => panic!(),
                     };
 
                     let MenuItem::Play(agent) = item else {
-                        match item {
-                            MenuItem::Train => {
-                                let t = thread::spawn(move || {
-                                    let mut trainer = get_trainer();
-                                    for _ in 0..10000 {
-                                        let mut agent = RLAgent::new(Game::new());
-                                        trainer.train(&mut agent, &QLearning::new(0.2, 0.01, 2.), &mut SinkStates {}, &RandomExploration::new());
-                                    }
-                                    // write out to file
-                                    let mut file = File::create(crate::agent::rl::data_file_path()).unwrap();
-                                    let res = ron::to_string(&trainer.export_learned_values()).unwrap();
-                                    file.write_all(res.as_bytes()).unwrap();
-                                });
-                                app.screen = Screen::Train(t);
-                            }
-                            MenuItem::Exit => {
-                                return Ok(IntAction::Exit);
-                            }
-                            _ => {}
+                        return match item {
+                            MenuItem::Exit => Ok(IntAction::Exit),
+                            _ => Ok(IntAction::Continue)
                         };
-                        return Ok(IntAction::Continue);
                     };
 
                     let agent = Arc::new(RwLock::new(agent));

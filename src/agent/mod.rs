@@ -5,7 +5,6 @@ use crate::{game::Game, tui::IntAction};
 
 pub mod expectimax;
 pub mod random;
-pub mod rl;
 pub mod user;
 
 pub trait Agent {

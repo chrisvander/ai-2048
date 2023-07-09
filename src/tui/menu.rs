@@ -10,8 +10,6 @@ pub static MENU_ITEMS: &[&str] = &[
     "Solve (Random)",
     "Solve (Tree Search, Max Score)",
     "Solve (Tree Search, Max Moves)",
-    "Train (RL)",
-    "Solve (RL)",
     "Solve (Expectimax)",
 ];
 
@@ -38,7 +36,6 @@ pub fn get_menu_text() -> impl Widget {
     let block = Block::default().title("Info").borders(Borders::ALL);
     let text = vec![
         Spans::from("Use arrow keys to navigate"),
-        Spans::from(format!("Writing to {}", crate::agent::rl::data_file_path())),
         Spans::from("Press q to exit"),
     ];
     let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });

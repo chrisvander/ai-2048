@@ -11,11 +11,7 @@ pub struct Game {
 
 impl Default for Game {
     fn default() -> Self {
-        let mut g = Game {
-            state: [0; 16],
-            score: 0,
-            num_moves: 0,
-        };
+        let mut g = Game::empty();
         g.generate_tile();
         g.generate_tile();
         g
@@ -32,41 +28,21 @@ pub enum Move {
     Right,
 }
 
-/// This function generates a new tile in a random empty spot. The new tile
-/// will be a 2 with 90% probability and a 4 with 10% probability.
-///
-/// * `v`: the current state of the game
-/// * `f`: a function to call when a new tile is generated
-fn merge_duplicates<F>(v: &Vec<u8>, mut f: F) -> Vec<u8>
-where
-    F: FnMut(usize) -> (),
-{
-    let mut r = Vec::with_capacity(4);
-    let mut skip = false;
-    for i in 0..v.len() {
-        if skip {
-            skip = false;
-            continue;
-        }
-        if i < v.len() - 1 && v[i] == v[i + 1] {
-            r.push(v[i] + 1);
-            // score
-            f(2_usize.pow((v[i] + 1).into()));
-            skip = true;
-        } else {
-            r.push(v[i]);
-        }
-    }
-    r
-}
-
 impl Game {
-    pub fn new_seeded(seed: u64) -> Self {
-        fastrand::seed(seed);
+    pub fn new() -> Self {
         Game::default()
     }
 
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
+        Game {
+            state: [0; 16],
+            score: 0,
+            num_moves: 0,
+        }
+    }
+
+    pub fn new_seeded(seed: u64) -> Self {
+        fastrand::seed(seed);
         Game::default()
     }
 
@@ -79,31 +55,20 @@ impl Game {
     pub fn update(&mut self, input: Move) -> bool {
         let state_before = self.state.clone();
         self.shift(input);
-        // element wise compare
-        if state_before != self.state {
-            self.generate_tile();
-            self.num_moves += 1;
-            return true;
+        if state_before == self.state {
+            return false;
         }
-        false
-    }
-
-    fn xy_to_index(x: u8, y: u8) -> usize {
-        (x + y * 4) as usize
-    }
-
-    pub fn is_available_move(&self, input: Move) -> bool {
-        let mut g = self.clone();
-        g.shift(input);
-        g.state != self.state
+        self.generate_tile();
+        self.num_moves += 1;
+        true
     }
 
     pub fn get_tile(&self, x: u8, y: u8) -> u8 {
-        self.state[Game::xy_to_index(x, y)]
+        self.state[(x + y * 4) as usize]
     }
 
     pub fn set_tile(&mut self, x: u8, y: u8, value: u8) {
-        self.state[Game::xy_to_index(x, y)] = value;
+        self.state[(x + y * 4) as usize] = value;
     }
 
     pub fn get_table(&self) -> Vec<Vec<u32>> {
@@ -155,22 +120,56 @@ impl Game {
         self.state = s;
     }
 
-    fn get_condensed_rows(&self) -> Vec<Vec<u8>> {
+    /// This function takes duplicates in a vector of u8 and merges them, while scoring
+    /// the result.
+    /// * `v`: the current state that row/column
+    /// * `score`: whether or not to score the result
+    fn merge_duplicates(&mut self, v: &[u8; 4], score: bool) -> [u8; 4] {
+        let mut i = 0;
+        let mut j = 0;
+        let mut r = [0; 4];
+        while i < 4 {
+            if i < 3 && v[i] != 0 && v[i] == v[i + 1]{
+                r[j] = v[i] + 1;
+                if score {
+                    self.score += 2_usize.pow(r[j] as u32);
+                }
+                j += 1;
+                i += 1;
+            } else if v[i] != 0 {
+                r[j] = v[i];
+                j += 1;
+            }
+            i += 1;
+        }
+        r
+    }
+
+    fn first_empty(&self, v: &[u8; 4]) -> usize {
+        v.iter().position(|n| *n == 0).unwrap_or(4)
+    }
+
+    fn get_condensed_rows(&self) -> [[u8; 4]; 4] {
         // get vec of rows with empty removed
         self.state
             .chunks(4)
-            .map(|row| row.iter().map(|n| *n).filter(|n| *n != 0).collect())
-            .collect()
+            .enumerate()
+            .fold([[0; 4]; 4], |mut acc, (i, row)| {
+                row.iter()
+                    .filter(|n| **n != 0)
+                    .for_each(|n| acc[i][self.first_empty(&acc[i])] = *n);
+                acc
+            })
     }
 
-    fn get_condensed_cols(&self) -> Vec<Vec<u8>> {
+    fn get_condensed_cols(&self) -> [[u8; 4]; 4] {
         // get vec of cols with empty removed
         self.state
             .iter()
             .enumerate()
-            .fold(vec![Vec::with_capacity(4); 4], |mut acc, (i, n)| {
+            .fold([[0; 4]; 4], |mut acc, (i, n)| {
                 if *n != 0 {
-                    acc[i % 4].push(*n);
+                    acc[i % 4][self.first_empty(&acc[i % 4])] = *n;
                 }
                 acc
             })
@@ -182,17 +181,25 @@ impl Game {
             Move::Left | Move::Right => self.get_condensed_rows(),
         };
 
-        let new_state: [u8; 16] = condensed
+        let mut new_state: [u8; 16] = condensed
             .iter()
-            .map(|v| merge_duplicates(v, |s| self.score += s))
-            .map(|mut v| {
-                let mut r = vec![0; 4 - v.len()];
+            .map(|v| self.merge_duplicates(v, true))
+            .map(|v| {
                 if input == Move::Up || input == Move::Left {
-                    v.append(&mut r);
                     v
                 } else {
-                    r.append(&mut v);
-                    r
+                    // swap where 0's are
+                    v.iter()
+                        .fold(vec![], |mut acc, &n| {
+                            if n != 0 {
+                                acc.push(n);
+                            } else {
+                                acc.insert(0, n);
+                            }
+                            acc
+                        })
+                        .try_into()
+                        .unwrap()
                 }
             })
             .flatten()
@@ -202,8 +209,8 @@ impl Game {
 
         match input {
             Move::Up | Move::Down => {
-                let mut transposed = vec![0; 16];
-                transpose::transpose(&mut Vec::from(new_state), &mut transposed, 4, 4);
+                let mut transposed = [0; 16];
+                transpose::transpose(&mut new_state, &mut transposed, 4, 4);
                 self.set_state(transposed.try_into().unwrap());
             }
             Move::Left | Move::Right => self.set_state(new_state),
@@ -237,7 +244,7 @@ mod tests {
     use super::*;
     #[test]
     fn set_state_and_tile() {
-        let mut game = Game::default();
+        let mut game = Game::empty();
         assert_eq!(game.get_tile(0, 0), 0);
 
         game.set_state([
@@ -257,9 +264,8 @@ mod tests {
 
     #[test]
     fn test_shift() {
-        let mut game = Game::default();
+        let mut game = Game::empty();
 
-        game.set_state([0; 16]);
         game.set_tile(0, 0, 1);
         game.set_tile(1, 0, 1);
 
@@ -281,21 +287,24 @@ mod tests {
 
     #[test]
     fn test_merge_duplicates() {
-        let v = vec![1, 1, 2, 2];
-        assert_eq!(merge_duplicates(&v, |_| {}), vec![2, 3]);
-        let v = vec![1, 2, 2, 2];
-        assert_eq!(merge_duplicates(&v, |_| {}), vec![1, 3, 2]);
-        let v = vec![1, 1, 1, 1];
-        assert_eq!(merge_duplicates(&v, |_| {}), vec![2, 2]);
-        let v = vec![1, 2, 2, 6];
-        assert_eq!(merge_duplicates(&v, |_| {}), vec![1, 3, 6]);
+        let mut game = Game::default();
+        let v = [1, 1, 2, 2];
+        assert_eq!(game.merge_duplicates(&v, true), [2, 3, 0, 0]);
+        assert_eq!(game.get_score(), &12);
+        let v = [1, 2, 2, 2];
+        assert_eq!(game.merge_duplicates(&v, true), [1, 3, 2, 0]);
+        assert_eq!(game.get_score(), &(12 + 8));
+        let v = [1, 1, 1, 1];
+        assert_eq!(game.merge_duplicates(&v, true), [2, 2, 0, 0]);
+        assert_eq!(game.get_score(), &(12 + 8 + 8));
+        let v = [1, 2, 2, 6];
+        assert_eq!(game.merge_duplicates(&v, true), [1, 3, 6, 0]);
     }
 
     #[test]
     fn test_condensed_getters() {
-        let mut game = Game::default();
+        let mut game = Game::empty();
 
-        game.set_state([0; 16]);
         game.set_tile(0, 0, 1);
         game.set_tile(1, 0, 1);
         game.set_tile(0, 3, 2);
@@ -303,9 +312,9 @@ mod tests {
         let condensed_rows = game.get_condensed_rows();
         let condensed_cols = game.get_condensed_cols();
 
-        assert_eq!(condensed_rows[0], vec![1, 1]);
-        assert_eq!(condensed_rows[3], vec![2]);
-        assert_eq!(condensed_cols[0], vec![1, 2]);
-        assert_eq!(condensed_cols[1], vec![1]);
+        assert_eq!(condensed_rows[0], [1, 1, 0, 0]);
+        assert_eq!(condensed_rows[3], [2, 0, 0, 0]);
+        assert_eq!(condensed_cols[0], [1, 2, 0, 0]);
+        assert_eq!(condensed_cols[1], [1, 0, 0, 0]);
     }
 }

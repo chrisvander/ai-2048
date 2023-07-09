@@ -52,7 +52,7 @@ impl Game {
         game
     }
 
-    pub fn update(&mut self, input: Move) -> bool {
+    pub fn make_move(&mut self, input: Move) -> bool {
         let state_before = self.state.clone();
         self.shift(input);
         if state_before == self.state {
@@ -187,7 +187,7 @@ impl Game {
             })
     }
 
-    fn shift(&mut self, input: Move) {
+    pub fn shift(&mut self, input: Move) {
         let condensed = match input {
             Move::Up | Move::Down => self.get_condensed_cols(),
             Move::Left | Move::Right => self.get_condensed_rows(),

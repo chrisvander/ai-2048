@@ -1,5 +1,6 @@
 use enum_map::Enum;
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
@@ -50,6 +51,17 @@ impl Game {
         let mut game = Game::default();
         game.state = state;
         game
+    }
+
+    pub fn available_moves(&self) -> Vec<Move> {
+        Move::iter()
+            .filter(|m| {
+                let mut game = self.clone();
+                let state_before = game.state.clone();
+                game.shift(*m);
+                state_before != game.state
+            })
+            .collect::<Vec<_>>()
     }
 
     pub fn make_move(&mut self, input: Move) -> bool {
@@ -221,7 +233,8 @@ impl Game {
     }
 
     fn generate_tile(&mut self) {
-        let n = fastrand::u8(1..=2);
+        let p = fastrand::f32();
+        let n = if p < 0.9 { 1 } else { 2 };
 
         // get indexes of empty tiles
         let empty_indexes = self

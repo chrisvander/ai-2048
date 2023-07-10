@@ -66,6 +66,7 @@ pub struct RandomTree {
     sim_count: usize,
     metric: RandomTreeMetric,
     last_scores: MoveScores,
+    parallel: bool,
 }
 
 pub enum RandomTreeMetric {
@@ -80,13 +81,20 @@ impl RandomTree {
             sim_count: 1000,
             metric: RandomTreeMetric::AvgScore,
             last_scores: MoveScores::default(),
+            parallel: true,
         }
     }
 
-    pub fn new_with(game: Game, sim_count: usize, metric: RandomTreeMetric) -> Self {
+    pub fn new_with(
+        game: Game,
+        sim_count: usize,
+        metric: RandomTreeMetric,
+        parallel: bool,
+    ) -> Self {
         let mut ag = RandomTree::new(game);
         ag.sim_count = sim_count;
         ag.metric = metric;
+        ag.parallel = parallel;
         ag
     }
 
@@ -99,18 +107,33 @@ impl RandomTree {
                 continue;
             }
 
-            let score = vec![0; self.sim_count]
-                .par_iter()
-                .map(|_| {
-                    let mut sim_game = self.game.clone();
-                    sim_game.make_move(game_move);
-                    let game = simulate_random_game(sim_game);
-                    match self.metric {
-                        RandomTreeMetric::AvgMoves => game.get_num_moves().clone(),
-                        RandomTreeMetric::AvgScore => game.get_score().clone(),
-                    }
-                })
-                .sum::<usize>();
+            let score = if self.parallel {
+                vec![0; self.sim_count]
+                    .par_iter()
+                    .map(|_| {
+                        let mut sim_game = self.game.clone();
+                        sim_game.make_move(game_move);
+                        let game = simulate_random_game(sim_game);
+                        match self.metric {
+                            RandomTreeMetric::AvgMoves => game.get_num_moves().clone(),
+                            RandomTreeMetric::AvgScore => game.get_score().clone(),
+                        }
+                    })
+                    .sum::<usize>()
+            } else {
+                vec![0; self.sim_count]
+                    .iter()
+                    .map(|_| {
+                        let mut sim_game = self.game.clone();
+                        sim_game.make_move(game_move);
+                        let game = simulate_random_game(sim_game);
+                        match self.metric {
+                            RandomTreeMetric::AvgMoves => game.get_num_moves().clone(),
+                            RandomTreeMetric::AvgScore => game.get_score().clone(),
+                        }
+                    })
+                    .sum::<usize>()
+            };
 
             scores[game_move] = score;
         }

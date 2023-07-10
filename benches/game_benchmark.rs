@@ -1,6 +1,6 @@
 use ai_2048::{
-    agent::random::RandomAgent,
     agent::Agent,
+    agent::{expectimax::Expectimax, random::RandomAgent},
     game::{Game, Move},
 };
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
@@ -59,6 +59,20 @@ fn criterion_benchmark(c: &mut Criterion) {
             |mut game| {
                 game.make_move(black_box(Move::Up));
                 game.make_move(black_box(Move::Down));
+            },
+            BatchSize::SmallInput,
+        )
+    });
+
+    c.bench_function("test expectimax", |b| {
+        b.iter_batched(
+            || {
+                let game = black_box(Game::new_seeded(0));
+                let agent = black_box(Expectimax::new_seeded(0, game));
+                agent
+            },
+            |agent| {
+                agent.next_move();
             },
             BatchSize::SmallInput,
         )

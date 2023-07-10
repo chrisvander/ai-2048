@@ -165,6 +165,7 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                             game,
                             1000,
                             RandomTreeMetric::AvgMoves,
+                            true
                         ))),
                         Some(4) => MenuItem::Play(Box::new(Expectimax::new(game))),
                         _ => panic!(),

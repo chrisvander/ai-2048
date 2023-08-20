@@ -64,19 +64,19 @@ fn criterion_benchmark(c: &mut Criterion) {
         )
     });
 
-    c.bench_function("test expectimax", |b| {
-        b.iter_batched(
-            || {
-                let game = black_box(Game::new_seeded(0));
-                let agent = black_box(Expectimax::new_seeded(0, game));
-                agent
-            },
-            |agent| {
-                agent.next_move();
-            },
-            BatchSize::SmallInput,
-        )
-    });
+    // c.bench_function("test expectimax", |b| {
+        // b.iter_batched(
+            // || {
+                // let game = black_box(Game::new_seeded(0));
+                // let agent = black_box(Expectimax::new_seeded(0, game));
+                // agent
+            // },
+            // |agent| {
+                // agent.next_move();
+            // },
+            // BatchSize::SmallInput,
+        // )
+    // });
 }
 
 criterion_group!(benches, criterion_benchmark);

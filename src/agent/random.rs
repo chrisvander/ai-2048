@@ -78,7 +78,7 @@ impl RandomTree {
     pub fn new(game: Game) -> Self {
         RandomTree {
             game,
-            sim_count: 1000,
+            sim_count: 5000,
             metric: RandomTreeMetric::AvgScore,
             last_scores: MoveScores::default(),
             parallel: true,

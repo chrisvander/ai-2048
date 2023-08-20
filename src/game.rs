@@ -233,25 +233,22 @@ impl Game {
     }
 
     fn generate_tile(&mut self) {
-        let p = fastrand::f32();
-        let n = if p < 0.9 { 1 } else { 2 };
-
         // get indexes of empty tiles
         let empty_indexes = self
             .state
             .iter()
             .enumerate()
-            .filter(|(_, &v)| v == 0)
-            .map(|(i, _)| i)
+            .filter_map(|(i, &v)| if v == 0 { Some(i) } else { None })
             .collect::<Vec<_>>();
 
         if empty_indexes.len() == 0 {
             return;
         }
 
-        let c_idx = fastrand::usize(0..empty_indexes.len());
-        let chosen_index = empty_indexes[c_idx];
-        self.state[chosen_index] = n;
+        let c_idx = empty_indexes[fastrand::usize(0..empty_indexes.len())];
+        let p = fastrand::f32();
+        let n = if p < 0.9 { 1 } else { 2 };
+        self.state[c_idx] = n;
     }
 }
 

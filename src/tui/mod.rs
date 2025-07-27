@@ -163,7 +163,7 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                         Some(2) => MenuItem::Play(Box::new(RandomTree::new(game))),
                         Some(3) => MenuItem::Play(Box::new(RandomTree::new_with(
                             game,
-                            5000,
+                            1000,
                             RandomTreeMetric::AvgMoves,
                             true,
                         ))),
@@ -174,7 +174,7 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                     let MenuItem::Play(agent) = item else {
                         return match item {
                             MenuItem::Exit => Ok(IntAction::Exit),
-                            _ => Ok(IntAction::Continue)
+                            _ => Ok(IntAction::Continue),
                         };
                     };
 
@@ -200,7 +200,7 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                 return Ok(IntAction::Continue);
             }
             let event = event::read()?;
-            let Event::Key(key_event) =  event else {
+            let Event::Key(key_event) = event else {
                 return Ok(IntAction::Continue);
             };
             match key_event.code {
@@ -215,7 +215,7 @@ fn get_interaction(app: &mut App, timeout: Duration) -> Result<IntAction, io::Er
                 return Ok(IntAction::Continue);
             }
             let event = event::read()?;
-            let Event::Key(key_event) =  event else {
+            let Event::Key(key_event) = event else {
                 return Ok(IntAction::Continue);
             };
 

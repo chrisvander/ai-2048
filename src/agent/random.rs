@@ -26,13 +26,8 @@ impl RandomAgent {
 
 impl Agent for RandomAgent {
     fn next_move(&self) -> Move {
-        match fastrand::usize(0..4) {
-            0 => Move::Up,
-            1 => Move::Down,
-            2 => Move::Left,
-            3 => Move::Right,
-            _ => unreachable!(),
-        }
+        let avail = self.game.available_moves();
+        return avail[fastrand::usize(0..avail.len())];
     }
 
     fn make_move(&mut self) {
@@ -78,7 +73,7 @@ impl RandomTree {
     pub fn new(game: Game) -> Self {
         RandomTree {
             game,
-            sim_count: 5000,
+            sim_count: 1000,
             metric: RandomTreeMetric::AvgScore,
             last_scores: MoveScores::default(),
             parallel: true,
